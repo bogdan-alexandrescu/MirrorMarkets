@@ -3,7 +3,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
@@ -12,9 +12,7 @@ COPY prisma/ prisma/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/services/api/node_modules ./services/api/node_modules
+COPY --from=deps /app ./
 COPY . .
 RUN pnpm db:generate
 RUN pnpm turbo build --filter=@mirrormarkets/api
