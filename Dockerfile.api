@@ -5,7 +5,9 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/shared/package.json packages/shared/
+COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
+COPY services/workers/package.json services/workers/
 COPY prisma/ prisma/
 RUN pnpm install --frozen-lockfile
 
