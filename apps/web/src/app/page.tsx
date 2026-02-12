@@ -9,6 +9,13 @@ export default function HomePage() {
   const { user, primaryWallet, handleLogOut, setShowAuthFlow } = useDynamicContext();
   const router = useRouter();
 
+  // Auto-redirect if already authenticated
+  useEffect(() => {
+    if (api.getToken() && user) {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
   useEffect(() => {
     if (user && primaryWallet) {
       // Verify with backend
@@ -24,6 +31,11 @@ export default function HomePage() {
       }
     }
   }, [user, primaryWallet, router]);
+
+  const onLogout = async () => {
+    api.setToken(null);
+    await handleLogOut();
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
@@ -55,7 +67,7 @@ export default function HomePage() {
                 Dashboard
               </button>
               <button
-                onClick={handleLogOut}
+                onClick={onLogout}
                 className="rounded-lg border border-gray-300 px-6 py-2 font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
               >
                 Sign out

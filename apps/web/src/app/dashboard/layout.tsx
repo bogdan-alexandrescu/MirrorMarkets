@@ -6,6 +6,7 @@ import {
   Copy,
   Search,
   Trophy,
+  Users,
   BarChart3,
   ClipboardList,
   Wallet,
@@ -14,11 +15,13 @@ import {
   Activity,
 } from 'lucide-react';
 import { SystemBanner } from '@/components/SystemBanner';
+import { WalletDropdown } from '@/components/WalletDropdown';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Copy Trade', icon: Copy },
   { href: '/dashboard/search', label: 'Search', icon: Search },
   { href: '/dashboard/leaderboard', label: 'Leaderboard', icon: Trophy },
+  { href: '/dashboard/following', label: 'Following', icon: Users },
   { href: '/dashboard/positions', label: 'Positions', icon: BarChart3 },
   { href: '/dashboard/orders', label: 'Orders', icon: ClipboardList },
   { href: '/dashboard/funds', label: 'Funds', icon: Wallet },
@@ -41,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
         <nav className="space-y-1 px-3 py-4">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href;
+            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'));
             return (
               <Link
                 key={href}
@@ -62,11 +65,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <main className="flex-1">
+        {/* Top header */}
+        <div className="flex h-16 items-center justify-end border-b border-gray-200 px-6 dark:border-gray-800">
+          <WalletDropdown />
+        </div>
         <SystemBanner />
         {/* Mobile nav */}
         <div className="flex gap-2 overflow-x-auto border-b border-gray-200 px-4 py-2 dark:border-gray-800 lg:hidden">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href;
+            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'));
             return (
               <Link
                 key={href}

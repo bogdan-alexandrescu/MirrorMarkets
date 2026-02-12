@@ -2,11 +2,26 @@ import type { ApiError } from '@mirrormarkets/shared';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+const JWT_KEY = 'mm_jwt';
+
 class ApiClient {
   private token: string | null = null;
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.token = localStorage.getItem(JWT_KEY);
+    }
+  }
+
   setToken(token: string | null) {
     this.token = token;
+    if (typeof window !== 'undefined') {
+      if (token) {
+        localStorage.setItem(JWT_KEY, token);
+      } else {
+        localStorage.removeItem(JWT_KEY);
+      }
+    }
   }
 
   getToken(): string | null {
