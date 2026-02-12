@@ -5,6 +5,8 @@ import { api } from '@/lib/api-client';
 import type {
   CopyProfileInfo,
   FollowInfo,
+  LeaderInfo,
+  LeaderEventInfo,
   OrderInfo,
   PositionInfo,
   ProvisioningStatus,
@@ -56,6 +58,22 @@ export function useLeaderboard() {
     queryKey: ['leaderboard'],
     queryFn: () => api.get<any[]>('/leaders/leaderboard'),
     staleTime: 60_000,
+  });
+}
+
+export function useLeader(leaderId: string) {
+  return useQuery({
+    queryKey: ['leader', leaderId],
+    queryFn: () => api.get<LeaderInfo>(`/leaders/${leaderId}`),
+    enabled: !!leaderId,
+  });
+}
+
+export function useLeaderEvents(leaderId: string, page = 1) {
+  return useQuery({
+    queryKey: ['leader-events', leaderId, page],
+    queryFn: () => api.get<PaginatedResponse<LeaderEventInfo>>(`/leaders/${leaderId}/events?page=${page}&pageSize=10`),
+    enabled: !!leaderId,
   });
 }
 
@@ -121,6 +139,15 @@ export function useCopyLogs(page = 1) {
   return useQuery({
     queryKey: ['copy-logs', page],
     queryFn: () => api.get<PaginatedResponse<any>>(`/copy/logs?page=${page}`),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useCopyLogsForLeader(leaderId: string, page = 1) {
+  return useQuery({
+    queryKey: ['copy-logs', 'leader', leaderId, page],
+    queryFn: () => api.get<PaginatedResponse<any>>(`/copy/logs?leaderId=${leaderId}&page=${page}&pageSize=10`),
+    enabled: !!leaderId,
     refetchInterval: 10_000,
   });
 }

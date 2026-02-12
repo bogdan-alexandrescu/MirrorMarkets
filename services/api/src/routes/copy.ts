@@ -87,16 +87,22 @@ export const copyRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
     const { page, pageSize } = paginationSchema.parse(request.query);
+    const { leaderId } = request.query as { leaderId?: string };
+
+    const where: any = { userId: request.userId };
+    if (leaderId) {
+      where.leaderEvent = { leaderId };
+    }
 
     const [items, total] = await Promise.all([
       app.prisma.copyAttempt.findMany({
-        where: { userId: request.userId },
+        where,
         include: { leaderEvent: true, order: true },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      app.prisma.copyAttempt.count({ where: { userId: request.userId } }),
+      app.prisma.copyAttempt.count({ where }),
     ]);
 
     return reply.send({
