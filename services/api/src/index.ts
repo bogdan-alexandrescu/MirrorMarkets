@@ -32,7 +32,7 @@ async function main() {
 
   // Plugins
   await app.register(cors, {
-    origin: config.WEB_URL,
+    origin: config.CORS_ORIGINS.split(',').map((s) => s.trim()),
     credentials: true,
   });
 
@@ -65,8 +65,8 @@ async function main() {
   // Health check
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
-  await app.listen({ port: config.API_PORT, host: config.API_HOST });
-  app.log.info(`API server listening on ${config.API_HOST}:${config.API_PORT}`);
+  await app.listen({ port: config.PORT, host: config.API_HOST });
+  app.log.info(`API server listening on ${config.API_HOST}:${config.PORT}`);
 }
 
 main().catch((err) => {

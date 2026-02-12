@@ -3,10 +3,10 @@ import { z } from 'zod';
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // Server
-  API_PORT: z.coerce.number().default(3001),
+  // Server (Railway injects PORT)
+  PORT: z.coerce.number().default(3001),
   API_HOST: z.string().default('0.0.0.0'),
-  WEB_URL: z.string().default('http://localhost:3000'),
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   // Database
   DATABASE_URL: z.string(),
@@ -15,11 +15,11 @@ const configSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
   // Dynamic.xyz
-  DYNAMIC_ENVIRONMENT_ID: z.string(),
-  DYNAMIC_PUBLIC_KEY: z.string(),
+  DYNAMIC_ENVIRONMENT_ID: z.string().default(''),
+  DYNAMIC_PUBLIC_KEY: z.string().default(''),
 
   // Trading key encryption
-  TRADING_KEY_ENCRYPTION_KEY: z.string().length(64),
+  TRADING_KEY_ENCRYPTION_KEY: z.string().default('0'.repeat(64)),
 
   // Polymarket
   POLYMARKET_CLOB_API_URL: z.string().default('https://clob.polymarket.com'),
