@@ -68,6 +68,9 @@ enum RelayerTxType {
   DEPOSIT
   WITHDRAW
   REDEEM
+  MODULE_ENABLE   // Phase 2B
+  MODULE_DISABLE  // Phase 2B
+  MODULE_EXEC     // Phase 2B: session key action through module
 }
 
 enum WithdrawalStatus {
@@ -75,6 +78,63 @@ enum WithdrawalStatus {
   SUBMITTED
   CONFIRMED
   FAILED
+}
+
+// ─── Phase 2A signing enums ─────────────────────────
+
+enum SigningRequestStatus {
+  CREATED
+  SENT
+  SUCCEEDED
+  FAILED
+  RETRIED
+}
+
+enum SigningRequestType {
+  TYPED_DATA
+  MESSAGE
+  TX
+}
+
+enum SigningPurpose {
+  CLOB_ORDER
+  CLOB_CANCEL
+  CLOB_API_KEY
+  WITHDRAW
+  CTF_REDEEM
+  CTF_APPROVE
+  SAFE_MODULE_OP
+  PROVISIONING_PROOF
+  BINDING_PROOF
+  OTHER
+}
+
+enum SigningProvider {
+  DYNAMIC_SERVER_WALLET
+  MOCK
+}
+
+// ─── Phase 2B enums ─────────────────────────────────
+
+enum SigningMode {
+  DYNAMIC_SERVER_WALLET   // Phase 2A: server wallet for CLOB + module for onchain
+  EIP1271_SAFE            // If Polymarket CLOB supports Safe signatures
+  USER_EMBEDDED_WALLET    // Fallback: user signs interactively
+}
+
+enum SessionKeyStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+  EXPIRED
+}
+
+enum ModuleTxStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+  BLOCKED       // Constraint violation — module rejected onchain
 }
 
 enum AuditAction {
@@ -97,17 +157,37 @@ enum AuditAction {
   AUTO_CLAIM_RUN
   SETTINGS_UPDATED
   ERROR
-  // Phase 2A additions
+  // Phase 2A
   SERVER_WALLET_CREATED
   SERVER_WALLET_FAILED
   SIGNING_REQUESTED
   SIGNING_COMPLETED
   SIGNING_FAILED
+  SIGN_REQUEST_SENT
+  SIGN_REQUEST_SUCCEEDED
+  SIGN_REQUEST_FAILED
+  SIGN_RATE_LIMITED
+  SIGN_RETRY_SCHEDULED
   MIGRATION_STARTED
   MIGRATION_COMPLETED
   MIGRATION_FAILED
   PRIVATE_KEY_DESTROYED
   OWNERSHIP_TRANSFERRED
+  BINDING_PROOF_CREATED
+  BINDING_PROOF_VERIFIED
+  // Phase 2B
+  MODULE_ENABLE_PREPARED
+  MODULE_ENABLE_CONFIRMED
+  MODULE_DISABLED
+  SESSION_KEY_REGISTERED
+  SESSION_KEY_ROTATED
+  SESSION_KEY_REVOKED
+  CONSTRAINTS_UPDATED
+  MODULE_TX_SUBMITTED
+  MODULE_TX_CONFIRMED
+  MODULE_TX_BLOCKED
+  WITHDRAWAL_ALLOWLIST_ADDED
+  WITHDRAWAL_ALLOWLIST_REMOVED
 }
 
 // ─── Models ─────────────────────────────────────────
@@ -135,6 +215,14 @@ model User {
   autoClaimSettings     AutoClaimSettings?
   autoClaimRuns         AutoClaimRun[]
   auditLogs             AuditLog[]
+  // Phase 2A
+  signingRequests       SigningRequest[]
+  bindingProof          BindingProof?
+  // Phase 2B
+  safeAutomation        SafeAutomation?
+  sessionKeys           SessionKey[]
+  withdrawalAllowlist   WithdrawalAllowlist[]
+  moduleTxs             ModuleTx[]
 
   @@map("users")
 }
@@ -175,6 +263,7 @@ model ServerWallet {
   dynamicServerWalletId String             @unique @map("dynamic_server_wallet_id")
   address               String
   status                ServerWalletStatus @default(CREATING)
+  lastError             String?            @map("last_error")
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
 
@@ -183,6 +272,50 @@ model ServerWallet {
   @@index([address])
   @@map("server_wallets")
 }
+
+// ─── Phase 2A: Signing Request Audit Trail ──────────
+
+model SigningRequest {
+  id              String               @id @default(cuid())
+  userId          String               @map("user_id")
+  requestType     SigningRequestType    @map("request_type")
+  purpose         SigningPurpose
+  idempotencyKey  String               @unique @map("idempotency_key")
+  payloadHash     String               @map("payload_hash")
+  payloadJson     Json?                @map("payload_json") // redacted if sensitive
+  status          SigningRequestStatus  @default(CREATED)
+  attemptCount    Int                  @default(0) @map("attempt_count")
+  lastError       String?              @map("last_error")
+  provider        SigningProvider
+  signature       String?
+  correlationId   String               @map("correlation_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([correlationId])
+  @@map("signing_requests")
+}
+
+// ─── Phase 2A: Binding Proof ────────────────────────
+
+model BindingProof {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("user_id")
+  embeddedWalletAddr String  @map("embedded_wallet_addr")
+  proofHash         String   @map("proof_hash") // sha256 of signed message
+  verifiedAt        DateTime @map("verified_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("binding_proofs")
+}
+
+// ─── Existing models (unchanged) ────────────────────
 
 model PolymarketCredentials {
   id              String   @id @default(cuid())
@@ -444,4 +577,83 @@ model IdempotencyKey {
   @@index([key])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+// ─── Phase 2B: Safe Automation ──────────────────────
+
+model SafeAutomation {
+  id                     String      @id @default(cuid())
+  userId                 String      @unique @map("user_id")
+  safeAddress            String      @map("safe_address")
+  moduleAddress          String      @map("module_address")
+  registryAddress        String?     @map("registry_address")
+  enabled                Boolean     @default(false)
+  signingMode            SigningMode @default(DYNAMIC_SERVER_WALLET) @map("signing_mode")
+  activeSessionKeyId     String?     @map("active_session_key_id")
+  sessionKeyPublicAddress String?    @map("session_key_public_address")
+  constraints            Json        @default("{}")
+  enableTxHash           String?     @map("enable_tx_hash")
+  enabledAt              DateTime?   @map("enabled_at")
+  disabledAt             DateTime?   @map("disabled_at")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([safeAddress])
+  @@map("safe_automations")
+}
+
+model SessionKey {
+  id                     String           @id @default(cuid())
+  userId                 String           @map("user_id")
+  publicAddress          String           @map("public_address")
+  encryptedPrivateKey    String           @map("encrypted_private_key")
+  status                 SessionKeyStatus @default(ACTIVE)
+  expiresAt              DateTime         @map("expires_at")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([publicAddress])
+  @@map("session_keys")
+}
+
+model WithdrawalAllowlist {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  address   String
+  label     String?
+  addedTxHash String? @map("added_tx_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, address])
+  @@map("withdrawal_allowlists")
+}
+
+model ModuleTx {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  sessionKeyId    String?       @map("session_key_id")
+  action          String        // e.g. "ctf_redeem", "erc20_approve", "withdrawal"
+  targetContract  String        @map("target_contract")
+  functionSelector String       @map("function_selector")
+  callData        String        @map("call_data")
+  notionalUsd     Float?        @map("notional_usd")
+  status          ModuleTxStatus @default(PENDING)
+  transactionHash String?       @map("transaction_hash")
+  errorMessage    String?       @map("error_message")
+  blockReason     String?       @map("block_reason")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("module_txs")
 }

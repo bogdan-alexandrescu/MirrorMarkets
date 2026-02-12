@@ -66,3 +66,132 @@ export interface TradingAuthorityProvider {
    */
   revoke?(userId: string): Promise<void>;
 }
+
+// ─── Phase 2A: Signing Request Tracking ─────────────────
+
+export type SigningPurpose =
+  | 'CLOB_ORDER'
+  | 'CLOB_CANCEL'
+  | 'CLOB_API_KEY'
+  | 'WITHDRAW'
+  | 'CTF_REDEEM'
+  | 'CTF_APPROVE'
+  | 'SAFE_MODULE_OP'
+  | 'PROVISIONING_PROOF'
+  | 'BINDING_PROOF'
+  | 'OTHER';
+
+export type SigningProvider = 'DYNAMIC_SERVER_WALLET' | 'MOCK';
+
+export interface SigningRequestInput {
+  userId: string;
+  requestType: 'TYPED_DATA' | 'MESSAGE' | 'TX';
+  purpose: SigningPurpose;
+  idempotencyKey: string;
+  payloadHash: string;
+  payloadJson?: unknown;
+  provider: SigningProvider;
+  correlationId: string;
+}
+
+export interface SigningRequestResult {
+  requestId: string;
+  signature: string;
+  provider: SigningProvider;
+  attemptCount: number;
+  durationMs: number;
+}
+
+// ─── Phase 2A: Signing Rate Limits ──────────────────────
+
+export interface SigningRateLimitConfig {
+  perUserPerMinute: number;
+  globalPerMinute: number;
+  burstMultiplier: number;
+}
+
+// ─── Phase 2A: Dynamic Server Wallet Adapter ────────────
+
+/**
+ * DynamicServerWalletAdapter — thin adapter boundary for Dynamic.xyz API calls.
+ *
+ * This is the low-level interface that maps 1:1 to Dynamic API operations.
+ * The TradingAuthorityProvider is the higher-level abstraction that uses this
+ * adapter internally plus adds rate limiting, signing request tracking, etc.
+ */
+export interface DynamicServerWalletAdapter {
+  createWallet(userId: string): Promise<{ walletId: string; address: string }>;
+  signMessage(walletId: string, message: string): Promise<string>;
+  signTypedData(walletId: string, typedData: EIP712TypedData): Promise<string>;
+  sendTransaction(walletId: string, tx: TransactionRequest): Promise<TransactionResult>;
+  getWallet(walletId: string): Promise<{ walletId: string; address: string; status: string }>;
+}
+
+// ─── Phase 2A: Binding Proof ────────────────────────────
+
+export interface BindingProofData {
+  embeddedWalletAddress: string;
+  serverWalletAddress: string;
+  nonce: string;
+  timestamp: number;
+  signature: string;
+}
+
+export const BINDING_MESSAGE_PREFIX = 'MirrorMarkets Wallet Binding';
+
+export function buildBindingMessage(
+  embeddedWalletAddress: string,
+  serverWalletAddress: string,
+  nonce: string,
+  timestamp: number,
+): string {
+  return [
+    BINDING_MESSAGE_PREFIX,
+    `Embedded: ${embeddedWalletAddress}`,
+    `Server: ${serverWalletAddress}`,
+    `Nonce: ${nonce}`,
+    `Timestamp: ${timestamp}`,
+  ].join('\n');
+}
+
+// ─── Phase 2B: Safe Module Types ────────────────────────
+
+export type SigningMode = 'DYNAMIC_SERVER_WALLET' | 'EIP1271_SAFE' | 'USER_EMBEDDED_WALLET';
+
+export type SessionKeyStatus = 'ACTIVE' | 'ROTATED' | 'REVOKED' | 'EXPIRED';
+
+export interface SafeConstraints {
+  maxNotionalPerTrade: number;
+  maxNotionalPerDay: number;
+  maxTxPerHour: number;
+  expiryTimestamp: number;
+  allowedTargets: string[];
+  allowedSelectors: string[];
+  tokenAllowlist: string[];
+}
+
+export const DEFAULT_SAFE_CONSTRAINTS: SafeConstraints = {
+  maxNotionalPerTrade: 100,
+  maxNotionalPerDay: 1000,
+  maxTxPerHour: 60,
+  expiryTimestamp: 0, // 0 = no expiry (set at registration)
+  allowedTargets: [],
+  allowedSelectors: [],
+  tokenAllowlist: [],
+};
+
+export interface SessionKeyRegistration {
+  publicAddress: string;
+  constraints: SafeConstraints;
+  expiresAt: number; // unix timestamp
+}
+
+export interface ModuleTxRequest {
+  userId: string;
+  sessionKeyId: string;
+  action: string;
+  targetContract: string;
+  functionSelector: string;
+  callData: string;
+  notionalUsd?: number;
+}

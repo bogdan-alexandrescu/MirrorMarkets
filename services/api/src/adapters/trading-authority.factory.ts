@@ -3,13 +3,21 @@ import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { getConfig } from '../config.js';
 import { DynamicServerWalletProvider } from './dynamic-server-wallet.provider.js';
 import { MockDynamicServerWalletProvider } from './mock-server-wallet.provider.js';
+import { DynamicApiAdapter } from './dynamic-api.adapter.js';
+import { SigningRequestService } from '../services/signing-request.service.js';
+import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
+import { SigningCircuitBreaker } from '../services/signing-circuit-breaker.js';
+import { AuditService } from '../services/audit.service.js';
 
 let _provider: TradingAuthorityProvider | null = null;
+let _signingCircuitBreaker: SigningCircuitBreaker | null = null;
+let _signingRateLimiter: SigningRateLimiter | null = null;
 
 /**
  * Returns a singleton TradingAuthorityProvider based on configuration.
  *
  * - Production with DYNAMIC_API_KEY set: DynamicServerWalletProvider
+ *   (with adapter, signing tracking, rate limiter, circuit breaker)
  * - Development / test without key: MockDynamicServerWalletProvider
  *
  * The factory is idempotent — calling it multiple times with the same
@@ -19,9 +27,21 @@ export function getTradingAuthorityProvider(prisma: PrismaClient): TradingAuthor
   if (_provider) return _provider;
 
   const config = getConfig();
+  const auditService = new AuditService(prisma);
 
   if (config.DYNAMIC_API_KEY && config.NODE_ENV === 'production') {
-    _provider = new DynamicServerWalletProvider(prisma);
+    const adapter = new DynamicApiAdapter();
+    const signingService = new SigningRequestService(prisma);
+    _signingRateLimiter = new SigningRateLimiter(auditService);
+    _signingCircuitBreaker = new SigningCircuitBreaker(auditService);
+
+    _provider = new DynamicServerWalletProvider(prisma, {
+      adapter,
+      signingService,
+      rateLimiter: _signingRateLimiter,
+      circuitBreaker: _signingCircuitBreaker,
+      auditService,
+    });
   } else {
     _provider = new MockDynamicServerWalletProvider(prisma);
   }
@@ -30,8 +50,26 @@ export function getTradingAuthorityProvider(prisma: PrismaClient): TradingAuthor
 }
 
 /**
+ * Get the signing circuit breaker instance (for health checks).
+ * Returns null if using mock provider.
+ */
+export function getSigningCircuitBreaker(): SigningCircuitBreaker | null {
+  return _signingCircuitBreaker;
+}
+
+/**
+ * Get the signing rate limiter instance (for health checks).
+ * Returns null if using mock provider.
+ */
+export function getSigningRateLimiter(): SigningRateLimiter | null {
+  return _signingRateLimiter;
+}
+
+/**
  * Reset the singleton — only used in tests.
  */
 export function resetTradingAuthorityProvider(): void {
   _provider = null;
+  _signingCircuitBreaker = null;
+  _signingRateLimiter = null;
 }

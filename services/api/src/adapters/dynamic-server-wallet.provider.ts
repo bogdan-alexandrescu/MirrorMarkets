@@ -5,31 +5,14 @@ import type {
   EIP712TypedData,
   TransactionRequest,
   TransactionResult,
+  SigningPurpose,
 } from '@mirrormarkets/shared';
-import { AppError, ErrorCodes } from '@mirrormarkets/shared';
-import { getConfig } from '../config.js';
-
-// ── Constants ──────────────────────────────────────────────────────────
-
-const DYNAMIC_API_BASE = 'https://app.dynamicauth.com/api/v0';
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 500; // exponential backoff base
-
-// ── Types (mapped from Dynamic REST API responses) ─────────────────────
-
-interface DynamicCreateWalletResponse {
-  id: string;
-  address: string;
-  chain: string;
-  name: string;
-  status: string;
-}
-
-interface DynamicSignResponse {
-  signature: string;
-}
-
-// ── Implementation ─────────────────────────────────────────────────────
+import { AppError, ErrorCodes, SIGNING_CONFIG } from '@mirrormarkets/shared';
+import { DynamicApiAdapter, DynamicApiError } from './dynamic-api.adapter.js';
+import { SigningRequestService } from '../services/signing-request.service.js';
+import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
+import { SigningCircuitBreaker } from '../services/signing-circuit-breaker.js';
+import { AuditService } from '../services/audit.service.js';
 
 /**
  * DynamicServerWalletProvider
@@ -38,27 +21,55 @@ interface DynamicSignResponse {
  * signing to Dynamic.xyz Server Wallets (MPC-backed).  The backend NEVER
  * sees or stores raw private keys.
  *
- * API reference (verify against latest Dynamic docs):
- *   POST /server-wallets            → create wallet
- *   GET  /server-wallets/:id        → get wallet info
- *   POST /server-wallets/:id/sign   → sign arbitrary message
- *   POST /server-wallets/:id/sign-typed-data → sign EIP-712
- *   POST /server-wallets/:id/sign-transaction → sign + broadcast tx
- *
- * Items on the Docs Verification Checklist are marked with [DVC-n].
+ * Enhanced in Phase 2A with:
+ *   - DynamicApiAdapter: thin boundary for Dynamic API calls
+ *   - SigningRequestService: audit trail for every signing operation
+ *   - SigningRateLimiter: per-user and global rate limits
+ *   - SigningCircuitBreaker: auto-degradation on Dynamic API failures
+ *   - Retry with exponential backoff
  */
 export class DynamicServerWalletProvider implements TradingAuthorityProvider {
-  constructor(private prisma: PrismaClient) {}
+  private adapter: DynamicApiAdapter;
+  private signingService: SigningRequestService;
+  private rateLimiter: SigningRateLimiter;
+  private circuitBreaker: SigningCircuitBreaker;
+  private auditService: AuditService;
 
-  // ── Core Interface ─────────────────────────────────────────────────
+  constructor(
+    private prisma: PrismaClient,
+    deps?: {
+      adapter?: DynamicApiAdapter;
+      signingService?: SigningRequestService;
+      rateLimiter?: SigningRateLimiter;
+      circuitBreaker?: SigningCircuitBreaker;
+      auditService?: AuditService;
+    },
+  ) {
+    this.auditService = deps?.auditService ?? new AuditService(prisma);
+    this.adapter = deps?.adapter ?? new DynamicApiAdapter();
+    this.signingService = deps?.signingService ?? new SigningRequestService(prisma);
+    this.rateLimiter = deps?.rateLimiter ?? new SigningRateLimiter(this.auditService);
+    this.circuitBreaker = deps?.circuitBreaker ?? new SigningCircuitBreaker(this.auditService);
+  }
+
+  // ── Accessors for health check / admin ──────────────────────────────
+
+  getCircuitBreaker(): SigningCircuitBreaker {
+    return this.circuitBreaker;
+  }
+
+  getRateLimiter(): SigningRateLimiter {
+    return this.rateLimiter;
+  }
+
+  // ── Core Interface ──────────────────────────────────────────────────
 
   async getAddress(userId: string): Promise<string> {
     const sw = await this.prisma.serverWallet.findUnique({ where: { userId } });
 
     if (sw && sw.status === 'READY') return sw.address;
     if (sw && sw.status === 'CREATING') {
-      // Poll Dynamic to see if it became ready
-      const fresh = await this.fetchWalletFromDynamic(sw.dynamicServerWalletId);
+      const fresh = await this.adapter.getWallet(sw.dynamicServerWalletId);
       if (fresh.status === 'active' || fresh.status === 'ready') {
         await this.prisma.serverWallet.update({
           where: { id: sw.id },
@@ -73,95 +84,62 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       );
     }
 
-    // No wallet yet — create one
     return this.createServerWallet(userId);
   }
 
   async signTypedData(userId: string, typedData: EIP712TypedData): Promise<string> {
-    const correlationId = randomUUID();
-    const sw = await this.requireReadyWallet(userId);
-
-    await this.auditSigningRequest(userId, correlationId, 'signTypedData');
-
-    try {
-      // [DVC-1] Verify exact request body shape against Dynamic docs
-      const result = await this.callDynamicWithRetry<DynamicSignResponse>(
-        `server-wallets/${sw.dynamicServerWalletId}/sign-typed-data`,
-        'POST',
-        {
-          typedData: JSON.stringify(typedData),
-          chain: 'EVM',
-        },
-      );
-
-      await this.auditSigningComplete(userId, correlationId);
-      return result.signature;
-    } catch (error) {
-      await this.auditSigningFailed(userId, correlationId, error);
-      throw this.wrapSigningError(error);
-    }
+    return this.executeWithTracking({
+      userId,
+      requestType: 'TYPED_DATA',
+      purpose: 'CLOB_ORDER',
+      payload: typedData,
+      execute: async (walletId) => this.adapter.signTypedData(walletId, typedData),
+    });
   }
 
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
-    const correlationId = randomUUID();
-    const sw = await this.requireReadyWallet(userId);
+    const messageStr = typeof message === 'string'
+      ? message
+      : Buffer.from(message).toString('hex');
 
-    await this.auditSigningRequest(userId, correlationId, 'signMessage');
-
-    try {
-      const messageStr = typeof message === 'string'
-        ? message
-        : Buffer.from(message).toString('hex');
-
-      // [DVC-2] Verify sign endpoint and encoding (hex vs utf8)
-      const result = await this.callDynamicWithRetry<DynamicSignResponse>(
-        `server-wallets/${sw.dynamicServerWalletId}/sign`,
-        'POST',
-        {
-          message: messageStr,
-          encoding: typeof message === 'string' ? 'utf8' : 'hex',
-          chain: 'EVM',
-        },
-      );
-
-      await this.auditSigningComplete(userId, correlationId);
-      return result.signature;
-    } catch (error) {
-      await this.auditSigningFailed(userId, correlationId, error);
-      throw this.wrapSigningError(error);
-    }
+    return this.executeWithTracking({
+      userId,
+      requestType: 'MESSAGE',
+      purpose: 'CLOB_API_KEY',
+      payload: { message: messageStr },
+      execute: async (walletId) => this.adapter.signMessage(walletId, messageStr),
+    });
   }
 
   async executeTransaction(userId: string, tx: TransactionRequest): Promise<TransactionResult> {
-    const correlationId = randomUUID();
     const sw = await this.requireReadyWallet(userId);
+    await this.rateLimiter.checkAndIncrement(userId);
+    await this.circuitBreaker.allowRequest();
 
-    await this.auditSigningRequest(userId, correlationId, 'executeTransaction');
+    const input = this.signingService.buildRequestInput({
+      userId,
+      requestType: 'TX',
+      purpose: 'WITHDRAW',
+      payload: tx,
+      provider: 'DYNAMIC_SERVER_WALLET',
+    });
+
+    const { id: requestId } = await this.signingService.create(input);
+    await this.signingService.markSent(requestId);
 
     try {
-      // [DVC-3] Verify transaction execution endpoint and response shape
-      const result = await this.callDynamicWithRetry<{ hash: string; status: string }>(
-        `server-wallets/${sw.dynamicServerWalletId}/sign-transaction`,
-        'POST',
-        {
-          transaction: {
-            to: tx.to,
-            data: tx.data,
-            value: tx.value ?? '0',
-            chainId: tx.chainId ?? 137,
-          },
-          chain: 'EVM',
-          broadcast: true,
-        },
+      const result = await this.retryWithBackoff(
+        () => this.adapter.sendTransaction(sw.dynamicServerWalletId, tx),
       );
 
-      await this.auditSigningComplete(userId, correlationId);
-      return {
-        hash: result.hash,
-        status: result.status === 'confirmed' ? 'confirmed' : 'submitted',
-      };
+      await this.signingService.markSucceeded(requestId, result.hash);
+      await this.circuitBreaker.recordSuccess();
+
+      return result;
     } catch (error) {
-      await this.auditSigningFailed(userId, correlationId, error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown';
+      await this.signingService.markFailed(requestId, errorMsg);
+      await this.circuitBreaker.recordFailure();
       throw this.wrapSigningError(error);
     }
   }
@@ -170,18 +148,15 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const oldWallet = await this.prisma.serverWallet.findUnique({ where: { userId } });
     if (!oldWallet) throw new AppError(ErrorCodes.NOT_FOUND, 'No server wallet to rotate', 404);
 
-    // Create a new server wallet
     const newAddress = await this.createServerWallet(userId, true);
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'OWNERSHIP_TRANSFERRED',
-        details: {
-          oldAddress: oldWallet.address,
-          newAddress,
-          note: 'Server wallet rotated — Proxy/Safe ownership transfer required',
-        },
+    await this.auditService.log({
+      userId,
+      action: 'OWNERSHIP_TRANSFERRED',
+      details: {
+        oldAddress: oldWallet.address,
+        newAddress,
+        note: 'Server wallet rotated — Proxy/Safe ownership transfer required',
       },
     });
   }
@@ -192,96 +167,143 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
     await this.prisma.serverWallet.update({
       where: { id: sw.id },
-      data: { status: 'FAILED' },
+      data: { status: 'FAILED', lastError: 'Wallet revoked' },
     });
 
-    // Pause copy trading
     await this.prisma.copyProfile.updateMany({
       where: { userId, status: 'ENABLED' },
       data: { status: 'PAUSED' },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'SERVER_WALLET_FAILED',
-        details: { reason: 'Wallet revoked', walletId: sw.dynamicServerWalletId },
-      },
+    await this.auditService.log({
+      userId,
+      action: 'SERVER_WALLET_FAILED',
+      details: { reason: 'Wallet revoked', walletId: sw.dynamicServerWalletId },
     });
   }
 
-  // ── Server wallet creation ─────────────────────────────────────────
+  // ── Unified signing flow with tracking ──────────────────────────────
+
+  private async executeWithTracking(params: {
+    userId: string;
+    requestType: 'TYPED_DATA' | 'MESSAGE';
+    purpose: SigningPurpose;
+    payload: unknown;
+    execute: (walletId: string) => Promise<string>;
+  }): Promise<string> {
+    const { userId, requestType, purpose, payload, execute } = params;
+
+    // Pre-flight checks
+    await this.rateLimiter.checkAndIncrement(userId);
+    await this.circuitBreaker.allowRequest();
+
+    const sw = await this.requireReadyWallet(userId);
+
+    // Build and check signing request idempotency
+    const input = this.signingService.buildRequestInput({
+      userId,
+      requestType,
+      purpose,
+      payload,
+      provider: 'DYNAMIC_SERVER_WALLET',
+    });
+
+    // Idempotency check — return cached signature if already succeeded
+    const cached = await this.signingService.findByIdempotencyKey(input.idempotencyKey);
+    if (cached) return cached;
+
+    // Create tracking record
+    const { id: requestId, correlationId } = await this.signingService.create(input);
+
+    await this.auditService.log({
+      userId,
+      action: 'SIGN_REQUEST_SENT',
+      details: { correlationId, requestType, purpose },
+    });
+
+    await this.signingService.markSent(requestId);
+
+    try {
+      const signature = await this.retryWithBackoff(() => execute(sw.dynamicServerWalletId));
+
+      await this.signingService.markSucceeded(requestId, signature);
+      await this.circuitBreaker.recordSuccess();
+
+      await this.auditService.log({
+        userId,
+        action: 'SIGN_REQUEST_SUCCEEDED',
+        details: { correlationId },
+      });
+
+      return signature;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown';
+
+      await this.signingService.markFailed(requestId, errorMsg);
+      await this.circuitBreaker.recordFailure();
+
+      await this.auditService.log({
+        userId,
+        action: 'SIGN_REQUEST_FAILED',
+        details: { correlationId, error: errorMsg },
+      });
+
+      throw this.wrapSigningError(error);
+    }
+  }
+
+  // ── Server wallet creation ──────────────────────────────────────────
 
   private async createServerWallet(userId: string, isRotation = false): Promise<string> {
-    const config = getConfig();
-
-    // Mark as creating (upsert handles idempotent re-calls)
     let sw = await this.prisma.serverWallet.findUnique({ where: { userId } });
     if (sw && sw.status === 'READY' && !isRotation) return sw.address;
 
     try {
-      // [DVC-4] Verify create server wallet endpoint and required fields
-      const created = await this.callDynamicWithRetry<DynamicCreateWalletResponse>(
-        'server-wallets',
-        'POST',
-        {
-          chain: 'EVM',
-          name: `mirror-${userId.slice(0, 8)}`,
-        },
+      const created = await this.retryWithBackoff(
+        () => this.adapter.createWallet(userId),
       );
 
-      if (sw && isRotation) {
-        // Replace existing record
+      if (sw) {
         await this.prisma.serverWallet.update({
           where: { id: sw.id },
           data: {
-            dynamicServerWalletId: created.id,
+            dynamicServerWalletId: created.walletId,
             address: created.address,
             status: 'READY',
-          },
-        });
-      } else if (sw) {
-        await this.prisma.serverWallet.update({
-          where: { id: sw.id },
-          data: {
-            dynamicServerWalletId: created.id,
-            address: created.address,
-            status: 'READY',
+            lastError: null,
           },
         });
       } else {
         await this.prisma.serverWallet.create({
           data: {
             userId,
-            dynamicServerWalletId: created.id,
+            dynamicServerWalletId: created.walletId,
             address: created.address,
             status: 'READY',
           },
         });
       }
 
-      // Also store in wallets table for compatibility
       await this.prisma.wallet.upsert({
         where: { userId_type: { userId, type: 'SERVER_WALLET' } },
         create: { userId, type: 'SERVER_WALLET', address: created.address },
         update: { address: created.address },
       });
 
-      await this.prisma.auditLog.create({
-        data: {
-          userId,
-          action: 'SERVER_WALLET_CREATED',
-          details: {
-            dynamicWalletId: created.id,
-            address: created.address,
-            isRotation,
-          },
+      await this.auditService.log({
+        userId,
+        action: 'SERVER_WALLET_CREATED',
+        details: {
+          dynamicWalletId: created.walletId,
+          address: created.address,
+          isRotation,
         },
       });
 
       return created.address;
     } catch (error) {
-      // Record failure but allow retry
+      const errorMsg = error instanceof Error ? error.message : 'Unknown';
+
       if (!sw) {
         await this.prisma.serverWallet.create({
           data: {
@@ -289,32 +311,31 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
             dynamicServerWalletId: `pending-${randomUUID()}`,
             address: '0x0000000000000000000000000000000000000000',
             status: 'FAILED',
+            lastError: errorMsg,
           },
         });
       } else {
         await this.prisma.serverWallet.update({
           where: { id: sw.id },
-          data: { status: 'FAILED' },
+          data: { status: 'FAILED', lastError: errorMsg },
         });
       }
 
-      await this.prisma.auditLog.create({
-        data: {
-          userId,
-          action: 'SERVER_WALLET_FAILED',
-          details: { error: error instanceof Error ? error.message : 'Unknown' },
-        },
+      await this.auditService.log({
+        userId,
+        action: 'SERVER_WALLET_FAILED',
+        details: { error: errorMsg },
       });
 
       throw new AppError(
         ErrorCodes.SERVER_WALLET_CREATION_FAILED,
-        `Failed to create server wallet: ${error instanceof Error ? error.message : 'Unknown'}`,
+        `Failed to create server wallet: ${errorMsg}`,
         503,
       );
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────
 
   private async requireReadyWallet(userId: string) {
     const sw = await this.prisma.serverWallet.findUnique({ where: { userId } });
@@ -328,113 +349,35 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     return sw;
   }
 
-  private async fetchWalletFromDynamic(walletId: string): Promise<{ address: string; status: string }> {
-    const result = await this.callDynamicWithRetry<{ address: string; status: string }>(
-      `server-wallets/${walletId}`,
-      'GET',
-    );
-    return result;
-  }
-
   /**
-   * Generic HTTP client for Dynamic API with exponential backoff retry,
-   * rate-limit handling (429), and timeout.
+   * Retry with exponential backoff. Handles DynamicApiError rate limiting.
    */
-  private async callDynamicWithRetry<T>(
-    path: string,
-    method: 'GET' | 'POST',
-    body?: Record<string, unknown>,
-  ): Promise<T> {
-    const config = getConfig();
-    const url = `${DYNAMIC_API_BASE}/${path}`;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  private async retryWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; attempt <= SIGNING_CONFIG.MAX_RETRY_ATTEMPTS; attempt++) {
       try {
-        const headers: Record<string, string> = {
-          'Authorization': `Bearer ${config.DYNAMIC_API_KEY}`,
-          'Content-Type': 'application/json',
-        };
-
-        const res = await fetch(url, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-          signal: AbortSignal.timeout(15_000),
-        });
-
-        if (res.status === 429) {
-          // Rate limited — respect Retry-After if present
-          const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10);
-          const delay = retryAfter * 1000;
-          if (attempt < MAX_RETRIES) {
-            await sleep(delay);
-            continue;
-          }
-          throw new AppError(ErrorCodes.RATE_LIMITED, 'Dynamic API rate limited', 429);
-        }
-
-        if (!res.ok) {
-          const errorBody = await res.text();
-          throw new Error(`Dynamic API ${method} ${path} failed: ${res.status} ${errorBody}`);
-        }
-
-        return (await res.json()) as T;
+        return await fn();
       } catch (error) {
-        if (error instanceof AppError) throw error;
+        if (attempt >= SIGNING_CONFIG.MAX_RETRY_ATTEMPTS) throw error;
 
-        if (attempt < MAX_RETRIES) {
-          const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+        if (error instanceof DynamicApiError && error.errorType === 'RATE_LIMITED') {
+          const delay = (error.retryAfterSeconds ?? 2) * 1000;
           await sleep(delay);
           continue;
         }
 
-        throw error;
+        if (error instanceof AppError) throw error;
+
+        const delay = SIGNING_CONFIG.RETRY_DELAY_MS * Math.pow(SIGNING_CONFIG.RETRY_BACKOFF_FACTOR, attempt);
+        await sleep(delay);
       }
     }
-
-    // Should never reach here
-    throw new Error('Exhausted retries for Dynamic API call');
+    throw new Error('Exhausted retries');
   }
 
   private wrapSigningError(error: unknown): AppError {
     if (error instanceof AppError) return error;
     const message = error instanceof Error ? error.message : 'Unknown signing error';
     return new AppError(ErrorCodes.SIGNING_UNAVAILABLE, message, 503);
-  }
-
-  // ── Audit helpers ──────────────────────────────────────────────────
-
-  private async auditSigningRequest(userId: string, correlationId: string, operation: string) {
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'SIGNING_REQUESTED',
-        details: { correlationId, operation },
-      },
-    });
-  }
-
-  private async auditSigningComplete(userId: string, correlationId: string) {
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'SIGNING_COMPLETED',
-        details: { correlationId },
-      },
-    });
-  }
-
-  private async auditSigningFailed(userId: string, correlationId: string, error: unknown) {
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'SIGNING_FAILED',
-        details: {
-          correlationId,
-          error: error instanceof Error ? error.message : 'Unknown',
-        },
-      },
-    });
   }
 }
 

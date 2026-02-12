@@ -5,6 +5,7 @@ import { CopyTradingWorker } from './workers/copy-trading.worker.js';
 import { AutoClaimWorker } from './workers/auto-claim.worker.js';
 import { HealthCheckWorker } from './workers/health-check.worker.js';
 import { PositionSyncWorker } from './workers/position-sync.worker.js';
+import { ModuleExecWorker } from './workers/module-exec.worker.js';
 import { getTradingAuthorityProvider } from './adapters/trading-authority.factory.js';
 
 const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
@@ -27,13 +28,15 @@ async function main() {
   const autoClaimWorker = new AutoClaimWorker(prisma, redis, logger);
   const healthWorker = new HealthCheckWorker(prisma, redis, logger);
   const positionWorker = new PositionSyncWorker(prisma, redis, logger);
+  const moduleExecWorker = new ModuleExecWorker(prisma, redis, logger);
 
   copyWorker.start();
   autoClaimWorker.start();
   healthWorker.start();
   positionWorker.start();
+  moduleExecWorker.start();
 
-  logger.info('All workers started');
+  logger.info('All workers started (including Phase 2B module-exec)');
 
   const shutdown = async () => {
     logger.info('Shutting down workers...');
@@ -41,6 +44,7 @@ async function main() {
     autoClaimWorker.stop();
     healthWorker.stop();
     positionWorker.stop();
+    moduleExecWorker.stop();
     await redis.quit();
     await prisma.$disconnect();
     process.exit(0);

@@ -1,0 +1,13 @@
+{
+  "name": "@mirrormarkets/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MirrorMarkets Solidity contracts — AutomationModule for Safe constrained automation",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vvv",
+    "test:gas": "forge test --gas-report",
+    "deploy:local": "forge script script/DeployModule.s.sol --fork-url http://localhost:8545 --broadcast",
+    "deploy:polygon": "forge script script/DeployModule.s.sol --rpc-url $POLYGON_RPC_URL --broadcast --verify"
+  }
+}

@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { SystemStatus } from '@mirrormarkets/shared';
 import { getConfig } from '../config.js';
+import { getSigningCircuitBreaker, getSigningRateLimiter } from '../adapters/trading-authority.factory.js';
 
 export const systemRoutes: FastifyPluginAsync = async (app) => {
   // GET /system/status
@@ -9,6 +10,9 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
   }, async (request, reply) => {
     const config = getConfig();
 
+    const signingCB = getSigningCircuitBreaker();
+    const signingRL = getSigningRateLimiter();
+
     const status: SystemStatus = {
       api: 'ok',
       database: 'ok',
@@ -16,11 +20,18 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
       dynamicApi: 'ok',
       polymarketClob: 'ok',
       relayer: 'ok',
+      signing: 'ok',
       workers: {
         copyTrading: 'running',
         autoClaim: 'running',
         healthCheck: 'running',
         positionSync: 'running',
+      },
+      signingStats: {
+        totalRequests1h: 0,
+        failedRequests1h: 0,
+        avgLatencyMs: 0,
+        circuitBreakerState: 'CLOSED',
       },
       lastCheckedAt: new Date().toISOString(),
     };
@@ -48,11 +59,44 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
         });
         if (!res.ok) status.dynamicApi = 'degraded';
       } else {
-        // No API key configured — running mock mode
         status.dynamicApi = 'degraded';
       }
     } catch {
       status.dynamicApi = 'down';
+    }
+
+    // Check signing subsystem health
+    if (signingCB) {
+      const cbStats = signingCB.getStats();
+      status.signingStats.circuitBreakerState = cbStats.state;
+
+      if (cbStats.state === 'OPEN') {
+        status.signing = 'down';
+      } else if (cbStats.state === 'HALF_OPEN') {
+        status.signing = 'degraded';
+      }
+    }
+
+    if (signingRL) {
+      const rlStats = signingRL.getStats();
+      status.signingStats.totalRequests1h = rlStats.globalCount;
+    }
+
+    // Get signing request stats from database
+    try {
+      const oneHourAgo = new Date(Date.now() - 3_600_000);
+      const [totalRequests, failedRequests] = await Promise.all([
+        app.prisma.signingRequest.count({
+          where: { createdAt: { gte: oneHourAgo } },
+        }),
+        app.prisma.signingRequest.count({
+          where: { status: 'FAILED', createdAt: { gte: oneHourAgo } },
+        }),
+      ]);
+      status.signingStats.totalRequests1h = totalRequests;
+      status.signingStats.failedRequests1h = failedRequests;
+    } catch {
+      // Non-critical: signing request stats unavailable
     }
 
     // Check worker statuses from Redis
@@ -92,7 +136,7 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
     if (status.database === 'down' || status.redis === 'down') {
       status.api = 'degraded';
     }
-    if (status.dynamicApi === 'down') {
+    if (status.dynamicApi === 'down' || status.signing === 'down') {
       status.api = 'degraded';
     }
 

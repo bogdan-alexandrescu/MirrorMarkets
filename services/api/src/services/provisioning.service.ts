@@ -26,11 +26,12 @@ export class ProvisioningService {
   ) {}
 
   async getStatus(userId: string): Promise<ProvisioningStatus> {
-    const [wallets, serverWallet, creds, copyProfile] = await Promise.all([
+    const [wallets, serverWallet, creds, copyProfile, bindingProof] = await Promise.all([
       this.prisma.wallet.findMany({ where: { userId } }),
       this.prisma.serverWallet.findUnique({ where: { userId } }),
       this.prisma.polymarketCredentials.findUnique({ where: { userId } }),
       this.prisma.copyProfile.findUnique({ where: { userId } }),
+      this.prisma.bindingProof.findUnique({ where: { userId } }),
     ]);
 
     const walletTypes = new Set(wallets.map((w) => w.type));
@@ -44,6 +45,7 @@ export class ProvisioningService {
       polyProxy: walletTypes.has('POLY_PROXY'),
       clobApiKey: !!creds?.apiKey,
       copyProfile: !!copyProfile,
+      bindingProof: !!bindingProof,
       complete: false,
     };
 
