@@ -1,0 +1,413 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────
+
+enum WalletType {
+  DYNAMIC_EOA
+  TRADING_EOA
+  POLY_PROXY
+}
+
+enum CopyProfileStatus {
+  DISABLED
+  ENABLED
+  PAUSED
+}
+
+enum FollowStatus {
+  ACTIVE
+  PAUSED
+  REMOVED
+}
+
+enum CopyAttemptStatus {
+  PENDING
+  SUBMITTED
+  FILLED
+  PARTIALLY_FILLED
+  FAILED
+  SKIPPED
+}
+
+enum OrderStatus {
+  OPEN
+  FILLED
+  PARTIALLY_FILLED
+  CANCELLED
+  EXPIRED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum RelayerTxStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
+
+enum RelayerTxType {
+  APPROVE
+  DEPOSIT
+  WITHDRAW
+  REDEEM
+}
+
+enum WithdrawalStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
+
+enum AuditAction {
+  USER_CREATED
+  WALLET_PROVISIONED
+  PROXY_DEPLOYED
+  COPY_ENABLED
+  COPY_DISABLED
+  COPY_ATTEMPT
+  ORDER_PLACED
+  ORDER_CANCELLED
+  FOLLOW_CREATED
+  FOLLOW_REMOVED
+  DEPOSIT_INITIATED
+  WITHDRAWAL_INITIATED
+  WITHDRAWAL_COMPLETED
+  CLAIM_REDEEMED
+  AUTO_CLAIM_ENABLED
+  AUTO_CLAIM_DISABLED
+  AUTO_CLAIM_RUN
+  SETTINGS_UPDATED
+  ERROR
+}
+
+// ─── Models ─────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  dynamicId String   @unique @map("dynamic_id")
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  authSessions          AuthSession[]
+  wallets               Wallet[]
+  polymarketCredentials PolymarketCredentials?
+  copyProfile           CopyProfile?
+  follows               Follow[]
+  copyAttempts          CopyAttempt[]
+  orders                Order[]
+  positionSnapshots     PositionSnapshot[]
+  relayerTxs            RelayerTx[]
+  withdrawals           Withdrawal[]
+  autoClaimSettings     AutoClaimSettings?
+  autoClaimRuns         AutoClaimRun[]
+  auditLogs             AuditLog[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model Wallet {
+  id         String     @id @default(cuid())
+  userId     String     @map("user_id")
+  type       WalletType
+  address    String
+  encPrivKey String?    @map("enc_priv_key")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([address])
+  @@map("wallets")
+}
+
+model PolymarketCredentials {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  apiKey          String   @map("api_key")
+  apiSecret       String   @map("api_secret")
+  passphrase      String
+  proxyAddress    String?  @map("proxy_address")
+  isProxyDeployed Boolean  @default(false) @map("is_proxy_deployed")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("polymarket_credentials")
+}
+
+model CopyProfile {
+  id                String            @id @default(cuid())
+  userId            String            @unique @map("user_id")
+  status            CopyProfileStatus @default(DISABLED)
+  maxPositionSizeUsd Float            @default(50) @map("max_position_size_usd")
+  maxOpenPositions  Int               @default(10) @map("max_open_positions")
+  copyPercentage    Float             @default(100) @map("copy_percentage")
+  minOdds           Float             @default(0.05) @map("min_odds")
+  maxOdds           Float             @default(0.95) @map("max_odds")
+  enabledMarketIds  String[]          @default([]) @map("enabled_market_ids")
+  blockedMarketIds  String[]          @default([]) @map("blocked_market_ids")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("copy_profiles")
+}
+
+model Leader {
+  id              String   @id @default(cuid())
+  address         String   @unique
+  displayName     String?  @map("display_name")
+  profileImageUrl String?  @map("profile_image_url")
+  pnl             Float    @default(0)
+  volume          Float    @default(0)
+  rank            Int?
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  follows      Follow[]
+  leaderEvents LeaderEvent[]
+
+  @@index([rank])
+  @@map("leaders")
+}
+
+model Follow {
+  id        String       @id @default(cuid())
+  userId    String       @map("user_id")
+  leaderId  String       @map("leader_id")
+  status    FollowStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leader Leader @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leaderId])
+  @@map("follows")
+}
+
+model LeaderEvent {
+  id             String   @id @default(cuid())
+  leaderId       String   @map("leader_id")
+  conditionId    String   @map("condition_id")
+  tokenId        String   @map("token_id")
+  marketSlug     String?  @map("market_slug")
+  side           OrderSide
+  size           Float
+  price          Float
+  transactionHash String? @map("transaction_hash")
+  detectedAt     DateTime @default(now()) @map("detected_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  leader       Leader        @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+  copyAttempts CopyAttempt[]
+
+  @@index([leaderId, detectedAt])
+  @@index([conditionId])
+  @@map("leader_events")
+}
+
+model CopyAttempt {
+  id            String            @id @default(cuid())
+  userId        String            @map("user_id")
+  leaderEventId String            @map("leader_event_id")
+  status        CopyAttemptStatus @default(PENDING)
+  orderId       String?           @map("order_id")
+  skipReason    String?           @map("skip_reason")
+  errorMessage  String?           @map("error_message")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaderEvent LeaderEvent @relation(fields: [leaderEventId], references: [id], onDelete: Cascade)
+  order       Order?      @relation(fields: [orderId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([leaderEventId])
+  @@map("copy_attempts")
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  userId       String      @map("user_id")
+  polyOrderId  String?     @unique @map("poly_order_id")
+  conditionId  String      @map("condition_id")
+  tokenId      String      @map("token_id")
+  marketSlug   String?     @map("market_slug")
+  side         OrderSide
+  size         Float
+  price        Float
+  filledSize   Float       @default(0) @map("filled_size")
+  status       OrderStatus @default(OPEN)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fills        Fill[]
+  copyAttempts CopyAttempt[]
+
+  @@index([userId, status])
+  @@index([conditionId])
+  @@map("orders")
+}
+
+model Fill {
+  id          String   @id @default(cuid())
+  orderId     String   @map("order_id")
+  polyFillId  String?  @unique @map("poly_fill_id")
+  size        Float
+  price       Float
+  side        OrderSide
+  fee         Float    @default(0)
+  filledAt    DateTime @map("filled_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("fills")
+}
+
+model PositionSnapshot {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  conditionId String   @map("condition_id")
+  tokenId     String   @map("token_id")
+  marketSlug  String?  @map("market_slug")
+  size        Float
+  avgPrice    Float    @map("avg_price")
+  currentPrice Float   @map("current_price")
+  pnl         Float    @default(0)
+  snapshotAt  DateTime @default(now()) @map("snapshot_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, conditionId])
+  @@map("position_snapshots")
+}
+
+model RelayerTx {
+  id              String          @id @default(cuid())
+  userId          String          @map("user_id")
+  type            RelayerTxType
+  status          RelayerTxStatus @default(PENDING)
+  transactionHash String?         @map("transaction_hash")
+  amount          Float?
+  errorMessage    String?         @map("error_message")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("relayer_txs")
+}
+
+model Withdrawal {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  amount          Float
+  destinationAddr String           @map("destination_addr")
+  status          WithdrawalStatus @default(PENDING)
+  transactionHash String?          @map("transaction_hash")
+  errorMessage    String?          @map("error_message")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("withdrawals")
+}
+
+model AutoClaimSettings {
+  id              String  @id @default(cuid())
+  userId          String  @unique @map("user_id")
+  enabled         Boolean @default(false)
+  minClaimableUsd Float   @default(1) @map("min_claimable_usd")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auto_claim_settings")
+}
+
+model AutoClaimRun {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  claimedCount Int      @default(0) @map("claimed_count")
+  claimedUsd   Float    @default(0) @map("claimed_usd")
+  errorMessage String?  @map("error_message")
+  ranAt        DateTime @default(now()) @map("ran_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, ranAt])
+  @@map("auto_claim_runs")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String?     @map("user_id")
+  action    AuditAction
+  details   Json?
+  ipAddress String?     @map("ip_address")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  userId       String   @map("user_id")
+  endpoint     String
+  statusCode   Int      @map("status_code")
+  responseBody Json     @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@index([key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
