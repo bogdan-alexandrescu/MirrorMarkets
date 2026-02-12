@@ -9,8 +9,7 @@ dist/
 .env.local
 .env.*.local
 
-# Database
-prisma/migrations/
+# Database (migrations are tracked for production deployment)
 
 # IDE
 .vscode/
@@ -27,3 +26,8 @@ pnpm-debug.log*
 # Coverage
 coverage/
 .nyc_output/
+
+# Foundry (Solidity)
+lib/
+out/
+cache/

@@ -42,7 +42,7 @@ export const WORKER_INTERVALS = {
   POSITION_SYNC_MS: 300_000,
 } as const;
 
-// Circuit breaker
+// Circuit breaker (copy trading)
 export const CIRCUIT_BREAKER = {
   FAILURE_THRESHOLD: 5,
   RECOVERY_TIMEOUT_MS: 60_000,
@@ -54,4 +54,53 @@ export const PAGINATION = {
   DEFAULT_PAGE: 1,
   DEFAULT_PAGE_SIZE: 20,
   MAX_PAGE_SIZE: 100,
+} as const;
+
+// ─── Phase 2A: Signing Rate Limits ──────────────────────
+
+export const SIGNING_RATE_LIMITS = {
+  PER_USER_PER_MINUTE: 30,
+  GLOBAL_PER_MINUTE: 300,
+  BURST_MULTIPLIER: 2,
+} as const;
+
+// Phase 2A: Signing circuit breaker (Dynamic API failures)
+export const SIGNING_CIRCUIT_BREAKER = {
+  FAILURE_THRESHOLD: 10,
+  WINDOW_MS: 300_000, // 5 minutes
+  RECOVERY_TIMEOUT_MS: 120_000, // 2 minutes in open state
+  HALF_OPEN_MAX_CALLS: 3,
+} as const;
+
+// Phase 2A: Signing request config
+export const SIGNING_CONFIG = {
+  MAX_RETRY_ATTEMPTS: 3,
+  RETRY_DELAY_MS: 1_000,
+  RETRY_BACKOFF_FACTOR: 2,
+  REQUEST_TIMEOUT_MS: 15_000,
+} as const;
+
+// ─── Phase 2B: Safe Module Constants ────────────────────
+
+export const SAFE_MODULE = {
+  /** Default constraints for new session key registrations */
+  DEFAULT_MAX_NOTIONAL_PER_TRADE: 100,
+  DEFAULT_MAX_NOTIONAL_PER_DAY: 1_000,
+  DEFAULT_MAX_TX_PER_HOUR: 60,
+  /** Session key lifetime: 7 days (seconds) */
+  DEFAULT_SESSION_KEY_TTL: 7 * 24 * 60 * 60,
+  /** Module version identifier */
+  MODULE_VERSION: '1.0.0',
+} as const;
+
+// Polymarket function selectors for allowlist
+export const POLYMARKET_SELECTORS = {
+  /** ERC20.approve(address,uint256) */
+  ERC20_APPROVE: '0x095ea7b3',
+  /** CTFExchange.fillOrder(...) */
+  CTF_FILL_ORDER: '0x23b872dd',
+  /** ConditionalTokens.redeemPositions(...) */
+  CTF_REDEEM: '0x01ffc9a7',
+  /** USDC.transfer(address,uint256) */
+  ERC20_TRANSFER: '0xa9059cbb',
 } as const;

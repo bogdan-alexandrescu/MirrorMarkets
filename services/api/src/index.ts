@@ -20,6 +20,8 @@ import { fundRoutes } from './routes/funds.js';
 import { claimRoutes } from './routes/claims.js';
 import { systemRoutes } from './routes/system.js';
 import { adminRoutes } from './routes/admin.js';
+import { bindingProofRoutes } from './routes/binding-proof.js';
+import { safeAutomationRoutes } from './routes/safe-automation.js';
 
 async function main() {
   const config = getConfig();
@@ -61,6 +63,8 @@ async function main() {
   await app.register(claimRoutes, { prefix: '/claims' });
   await app.register(systemRoutes, { prefix: '/system' });
   await app.register(adminRoutes, { prefix: '/admin' });
+  await app.register(bindingProofRoutes, { prefix: '/binding-proof' });
+  await app.register(safeAutomationRoutes, { prefix: '/safe-automation' });
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

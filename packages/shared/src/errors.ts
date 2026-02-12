@@ -34,6 +34,27 @@ export const ErrorCodes = {
   NOTHING_TO_CLAIM: 'NOTHING_TO_CLAIM',
   CLAIM_FAILED: 'CLAIM_FAILED',
 
+  // Signing (Phase 2A)
+  SIGNING_UNAVAILABLE: 'SIGNING_UNAVAILABLE',
+  SERVER_WALLET_NOT_READY: 'SERVER_WALLET_NOT_READY',
+  SERVER_WALLET_CREATION_FAILED: 'SERVER_WALLET_CREATION_FAILED',
+  SIGNING_RATE_LIMITED: 'SIGNING_RATE_LIMITED',
+  SIGNING_CIRCUIT_BREAKER_OPEN: 'SIGNING_CIRCUIT_BREAKER_OPEN',
+  SIGNING_FAILED: 'SIGNING_FAILED',
+  BINDING_PROOF_REQUIRED: 'BINDING_PROOF_REQUIRED',
+  BINDING_PROOF_INVALID: 'BINDING_PROOF_INVALID',
+
+  // Safe Module (Phase 2B)
+  MODULE_NOT_ENABLED: 'MODULE_NOT_ENABLED',
+  MODULE_NOT_INSTALLED: 'MODULE_NOT_INSTALLED',
+  SESSION_KEY_EXPIRED: 'SESSION_KEY_EXPIRED',
+  SESSION_KEY_REVOKED: 'SESSION_KEY_REVOKED',
+  SESSION_KEY_NOT_FOUND: 'SESSION_KEY_NOT_FOUND',
+  CONSTRAINT_VIOLATION: 'CONSTRAINT_VIOLATION',
+  ALLOWLIST_VIOLATION: 'ALLOWLIST_VIOLATION',
+  SAFE_NOT_CONFIGURED: 'SAFE_NOT_CONFIGURED',
+  MODULE_TX_FAILED: 'MODULE_TX_FAILED',
+
   // System
   IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',
@@ -92,5 +113,39 @@ export class ConflictError extends AppError {
 export class RateLimitError extends AppError {
   constructor() {
     super(ErrorCodes.RATE_LIMITED, 'Too many requests', 429);
+  }
+}
+
+export class SigningError extends AppError {
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
+    super(code, message, 503, details);
+  }
+}
+
+export class SigningRateLimitError extends AppError {
+  constructor(userId: string, limitType: 'per_user' | 'global') {
+    super(
+      ErrorCodes.SIGNING_RATE_LIMITED,
+      `Signing rate limit exceeded (${limitType})`,
+      429,
+      { userId, limitType },
+    );
+  }
+}
+
+export class ModuleError extends AppError {
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
+    super(code, message, 400, details);
+  }
+}
+
+export class ConstraintViolationError extends AppError {
+  constructor(constraint: string, value: unknown, limit: unknown) {
+    super(
+      ErrorCodes.CONSTRAINT_VIOLATION,
+      `Constraint violation: ${constraint}`,
+      403,
+      { constraint, value, limit },
+    );
   }
 }

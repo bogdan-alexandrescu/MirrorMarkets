@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { DEFAULT_GUARDRAILS, PAGINATION } from './constants.js';
+import { DEFAULT_GUARDRAILS, PAGINATION, SAFE_MODULE } from './constants.js';
+
+const ethAddress = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
+const bytes4Selector = z.string().regex(/^0x[a-fA-F0-9]{8}$/);
 
 // Auth
 export const verifyDynamicSchema = z.object({
@@ -8,7 +11,7 @@ export const verifyDynamicSchema = z.object({
 
 // Follows
 export const createFollowSchema = z.object({
-  leaderAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  leaderAddress: ethAddress,
 });
 
 // Copy Profile
@@ -37,7 +40,7 @@ export const cancelOrderSchema = z.object({
 // Withdrawals
 export const createWithdrawalSchema = z.object({
   amount: z.number().positive(),
-  destinationAddr: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  destinationAddr: ethAddress,
 });
 
 // Claims
@@ -73,4 +76,58 @@ export const guardrailsSchema = z.object({
 // Admin
 export const retryRelayerSchema = z.object({
   txId: z.string().min(1),
+});
+
+// ─── Phase 2A: Binding Proof ────────────────────────────
+
+export const submitBindingProofSchema = z.object({
+  embeddedWalletAddress: ethAddress,
+  serverWalletAddress: ethAddress,
+  nonce: z.string().min(1).max(64),
+  timestamp: z.number().int().positive(),
+  signature: z.string().min(1),
+});
+
+// ─── Phase 2B: Safe Automation ──────────────────────────
+
+export const constraintsSchema = z.object({
+  maxNotionalPerTrade: z.number().min(0).max(1_000_000).default(SAFE_MODULE.DEFAULT_MAX_NOTIONAL_PER_TRADE),
+  maxNotionalPerDay: z.number().min(0).max(10_000_000).default(SAFE_MODULE.DEFAULT_MAX_NOTIONAL_PER_DAY),
+  maxTxPerHour: z.number().int().min(0).max(1_000).default(SAFE_MODULE.DEFAULT_MAX_TX_PER_HOUR),
+  expiryTimestamp: z.number().int().min(0).default(0),
+  allowedTargets: z.array(ethAddress).default([]),
+  allowedSelectors: z.array(bytes4Selector).default([]),
+  tokenAllowlist: z.array(ethAddress).default([]),
+});
+
+export const enableModuleSchema = z.object({
+  safeAddress: ethAddress,
+  moduleAddress: ethAddress,
+  ownerSignature: z.string().min(1),
+});
+
+export const updateConstraintsSchema = z.object({
+  constraints: constraintsSchema,
+});
+
+export const updateSigningModeSchema = z.object({
+  signingMode: z.enum(['DYNAMIC_SERVER_WALLET', 'EIP1271_SAFE', 'USER_EMBEDDED_WALLET']),
+});
+
+export const registerSessionKeySchema = z.object({
+  constraints: constraintsSchema,
+  expiresInSeconds: z.number().int().min(3600).max(30 * 24 * 60 * 60).default(SAFE_MODULE.DEFAULT_SESSION_KEY_TTL),
+});
+
+export const revokeSessionKeySchema = z.object({
+  sessionKeyId: z.string().min(1),
+});
+
+export const addWithdrawalAllowlistSchema = z.object({
+  address: ethAddress,
+  label: z.string().max(100).optional(),
+});
+
+export const removeWithdrawalAllowlistSchema = z.object({
+  address: ethAddress,
 });
