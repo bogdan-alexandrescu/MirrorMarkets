@@ -1,40 +1,19 @@
 'use client';
 
-import { useDynamicContext, getAuthToken } from '@dynamic-labs/sdk-react-core';
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { api } from '@/lib/api-client';
 
 export default function HomePage() {
   const { user, handleLogOut, setShowAuthFlow } = useDynamicContext();
   const router = useRouter();
-  const verifying = useRef(false);
 
-  // When Dynamic user is present, verify with backend and redirect
+  // Returning user with a valid session token — go straight to dashboard
   useEffect(() => {
-    if (!user) return;
-
-    // If we already have a valid session token, go straight to dashboard
-    if (api.getToken()) {
+    if (api.getToken() && user) {
       router.replace('/dashboard');
-      return;
     }
-
-    // Get the Dynamic JWT and verify with our backend
-    const dynamicJwt = getAuthToken();
-    if (!dynamicJwt || verifying.current) return;
-
-    verifying.current = true;
-    api
-      .post<{ token: string }>('/auth/dynamic/verify', { token: dynamicJwt })
-      .then((res) => {
-        api.setToken(res.token);
-        router.push('/dashboard');
-      })
-      .catch((err) => {
-        console.error('Auth verify failed:', err);
-        verifying.current = false;
-      });
   }, [user, router]);
 
   const onLogout = async () => {
@@ -65,25 +44,9 @@ export default function HomePage() {
             Sign in with Email
           </button>
         ) : (
-          <div className="space-y-4">
-            <p className="text-gray-600 dark:text-gray-400">
-              Signed in as {user.email}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="rounded-lg bg-brand-600 px-6 py-2 font-semibold text-white hover:bg-brand-700"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={onLogout}
-                className="rounded-lg border border-gray-300 px-6 py-2 font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Redirecting to dashboard...
+          </p>
         )}
       </div>
     </div>
