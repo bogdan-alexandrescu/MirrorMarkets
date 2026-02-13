@@ -9,7 +9,7 @@ import { shortenAddress, formatUsd, formatPnl } from '@mirrormarkets/shared';
 
 export default function LeaderDetailPage() {
   const { leaderId } = useParams<{ leaderId: string }>();
-  const { data: leader, isLoading: leaderLoading } = useLeader(leaderId);
+  const { data: leader, isLoading: leaderLoading, error: leaderError } = useLeader(leaderId);
   const [eventsPage, setEventsPage] = useState(1);
   const [logsPage, setLogsPage] = useState(1);
   const { data: events, isLoading: eventsLoading } = useLeaderEvents(leaderId, eventsPage);
@@ -19,8 +19,38 @@ export default function LeaderDetailPage() {
     return <p className="text-gray-500">Loading leader...</p>;
   }
 
+  if (leaderError) {
+    return (
+      <div className="space-y-4">
+        <Link
+          href="/dashboard/following"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Following
+        </Link>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+          <p className="text-sm text-red-700 dark:text-red-400">
+            Failed to load leader. {leaderError.message}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!leader) {
-    return <p className="text-gray-500">Leader not found.</p>;
+    return (
+      <div className="space-y-4">
+        <Link
+          href="/dashboard/following"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Following
+        </Link>
+        <p className="text-gray-500">Leader not found.</p>
+      </div>
+    );
   }
 
   return (

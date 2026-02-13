@@ -5,7 +5,7 @@ import { useFollows } from '@/hooks/useApi';
 import { shortenAddress, formatUsd, formatPnl } from '@mirrormarkets/shared';
 
 export default function FollowingPage() {
-  const { data: follows, isLoading } = useFollows();
+  const { data: follows, isLoading, error } = useFollows();
 
   return (
     <div className="space-y-6">
@@ -13,6 +13,12 @@ export default function FollowingPage() {
 
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+          <p className="text-sm text-red-700 dark:text-red-400">
+            Failed to load follows. {error.message}
+          </p>
+        </div>
       ) : follows && follows.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {follows.map((follow) => (
