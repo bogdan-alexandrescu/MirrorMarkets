@@ -30,4 +30,4 @@ RUN mkdir -p node_modules/@mirrormarkets && ln -s /app/packages/shared node_modu
 
 ENV NODE_ENV=production
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma migrate resolve --applied 20260212000000_phase2a_server_wallets --schema ./prisma/schema.prisma 2>/dev/null; npx prisma migrate deploy --schema ./prisma/schema.prisma && node services/api/dist/index.js"]
+CMD ["sh", "-c", "echo \"DO \\$\\$BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users') THEN DROP TABLE IF EXISTS _prisma_migrations; END IF; END\\$\\$;\" | npx prisma db execute --schema ./prisma/schema.prisma --stdin 2>/dev/null; npx prisma migrate deploy --schema ./prisma/schema.prisma && node services/api/dist/index.js"]
