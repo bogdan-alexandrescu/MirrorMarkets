@@ -1,9 +1,10 @@
 'use client';
 
-import { DynamicContextProvider } from '@dynamic-labs/sdk-react-core';
+import { DynamicContextProvider, getAuthToken } from '@dynamic-labs/sdk-react-core';
 import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { api } from '@/lib/api-client';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,6 +24,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
       settings={{
         environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID ?? '',
         walletConnectors: [EthereumWalletConnectors],
+        events: {
+          onAuthSuccess: async () => {
+            // Dynamic auth complete — verify with our backend and get a session token
+            const dynamicJwt = getAuthToken();
+            if (!dynamicJwt || api.getToken()) return;
+
+            try {
+              const res = await api.post<{ token: string }>('/auth/dynamic/verify', { token: dynamicJwt });
+              api.setToken(res.token);
+              window.location.href = '/dashboard';
+            } catch (err) {
+              console.error('Backend auth verify failed:', err);
+            }
+          },
+        },
       }}
     >
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

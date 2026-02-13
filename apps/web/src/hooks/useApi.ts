@@ -68,7 +68,7 @@ export function useLeader(leaderId: string) {
   return useQuery({
     queryKey: ['leader', leaderId],
     queryFn: () => api.get<LeaderInfo>(`/leaders/${leaderId}`),
-    enabled: !!leaderId,
+    enabled: !!leaderId && !!api.getToken(),
   });
 }
 
@@ -76,7 +76,7 @@ export function useLeaderEvents(leaderId: string, page = 1) {
   return useQuery({
     queryKey: ['leader-events', leaderId, page],
     queryFn: () => api.get<PaginatedResponse<LeaderEventInfo>>(`/leaders/${leaderId}/events?page=${page}&pageSize=10`),
-    enabled: !!leaderId,
+    enabled: !!leaderId && !!api.getToken(),
   });
 }
 
@@ -111,6 +111,7 @@ export function useCopyProfile() {
   return useQuery({
     queryKey: ['copy-profile'],
     queryFn: () => api.get<CopyProfileInfo>('/copy/profile'),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -143,6 +144,7 @@ export function useCopyLogs(page = 1) {
   return useQuery({
     queryKey: ['copy-logs', page],
     queryFn: () => api.get<PaginatedResponse<any>>(`/copy/logs?page=${page}`),
+    enabled: !!api.getToken(),
     refetchInterval: 10_000,
   });
 }
@@ -151,7 +153,7 @@ export function useCopyLogsForLeader(leaderId: string, page = 1) {
   return useQuery({
     queryKey: ['copy-logs', 'leader', leaderId, page],
     queryFn: () => api.get<PaginatedResponse<any>>(`/copy/logs?leaderId=${leaderId}&page=${page}&pageSize=10`),
-    enabled: !!leaderId,
+    enabled: !!leaderId && !!api.getToken(),
     refetchInterval: 10_000,
   });
 }
@@ -161,6 +163,7 @@ export function useOrders(page = 1) {
   return useQuery({
     queryKey: ['orders', page],
     queryFn: () => api.get<PaginatedResponse<OrderInfo>>(`/orders?page=${page}`),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -186,6 +189,7 @@ export function usePositions() {
   return useQuery({
     queryKey: ['positions'],
     queryFn: () => api.get<PositionInfo[]>('/portfolio/positions'),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -194,6 +198,7 @@ export function useDepositAddress() {
   return useQuery({
     queryKey: ['deposit-address'],
     queryFn: () => api.get<{ address: string; chain: string; token: string }>('/funds/deposit-address'),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -213,6 +218,7 @@ export function useWithdrawals(page = 1) {
   return useQuery({
     queryKey: ['withdrawals', page],
     queryFn: () => api.get<PaginatedResponse<any>>(`/funds/withdrawals?page=${page}`),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -221,6 +227,7 @@ export function useClaimable() {
   return useQuery({
     queryKey: ['claimable'],
     queryFn: () => api.get<any[]>('/claims/claimable'),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -239,6 +246,7 @@ export function useAutoClaimSettings() {
   return useQuery({
     queryKey: ['auto-claim'],
     queryFn: () => api.get<AutoClaimSettingsInfo>('/claims/auto-claim'),
+    enabled: !!api.getToken(),
   });
 }
 
@@ -256,6 +264,7 @@ export function useSystemStatus() {
   return useQuery({
     queryKey: ['system-status'],
     queryFn: () => api.get<SystemStatus>('/system/status'),
+    enabled: !!api.getToken(),
     refetchInterval: 60_000,
   });
 }
