@@ -9,6 +9,10 @@ export const verifyDynamicSchema = z.object({
   token: z.string().min(1),
 });
 
+export const verifyTokenSchema = z.object({
+  token: z.string().min(1),
+});
+
 // Follows
 export const createFollowSchema = z.object({
   leaderAddress: ethAddress,

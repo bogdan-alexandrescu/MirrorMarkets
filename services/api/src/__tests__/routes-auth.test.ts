@@ -13,6 +13,16 @@ vi.mock('../adapters/dynamic.adapter.js', () => ({
   },
 }));
 
+// ── Mock CrossmintAuthAdapter ────────────────────────────────────────────────
+
+const mockCrossmintVerify = vi.fn();
+
+vi.mock('../adapters/crossmint-auth.adapter.js', () => ({
+  CrossmintAuthAdapter: class {
+    verifyToken = mockCrossmintVerify;
+  },
+}));
+
 // ── Mock data ────────────────────────────────────────────────────────────────
 
 const MOCK_DYNAMIC_JWT = {
@@ -32,8 +42,20 @@ const MOCK_DYNAMIC_JWT = {
 const MOCK_USER = {
   id: 'user-1',
   dynamicId: 'dynamic-user-123',
+  crossmintId: null,
   email: 'test@example.com',
   name: 'Test User',
+  avatarUrl: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const MOCK_CROSSMINT_USER = {
+  id: 'user-2',
+  dynamicId: null,
+  crossmintId: 'crossmint-user-456',
+  email: 'crossmint@example.com',
+  name: null,
   avatarUrl: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -52,6 +74,9 @@ function createMockPrisma() {
   return {
     user: {
       upsert: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     authSession: {
       create: vi.fn(),
@@ -133,6 +158,134 @@ function mockAuthSession(mockPrisma: ReturnType<typeof createMockPrisma>, userId
 }
 
 const AUTH = { authorization: 'Bearer valid-token' };
+
+// ── Tests: POST /auth/crossmint/verify ──────────────────────────────────────
+
+describe('POST /auth/crossmint/verify', () => {
+  let app: FastifyInstance;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(async () => {
+    mockPrisma = createMockPrisma();
+    app = await buildApp(mockPrisma);
+    mockCrossmintVerify.mockReset();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 400 when token is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 401 when Crossmint JWT is invalid', async () => {
+    mockCrossmintVerify.mockRejectedValue(
+      new AppError(ErrorCodes.UNAUTHORIZED, 'Invalid Crossmint JWT', 401),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'bad-jwt' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('creates new user and session on valid token', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-456',
+      email: 'crossmint@example.com',
+    });
+    mockPrisma.user.findUnique.mockResolvedValue(null); // no existing user
+    mockPrisma.user.create.mockResolvedValue(MOCK_CROSSMINT_USER);
+    mockPrisma.authSession.create.mockResolvedValue(MOCK_SESSION);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.token).toBeDefined();
+    expect(body.expiresAt).toBeDefined();
+    expect(body.user.id).toBe('user-2');
+    expect(body.user.email).toBe('crossmint@example.com');
+  });
+
+  it('updates existing user by crossmintId', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-456',
+      email: 'crossmint@example.com',
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce(MOCK_CROSSMINT_USER); // found by crossmintId
+    mockPrisma.user.update.mockResolvedValue(MOCK_CROSSMINT_USER);
+    mockPrisma.authSession.create.mockResolvedValue(MOCK_SESSION);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { crossmintId: 'crossmint-user-456' },
+      data: { email: 'crossmint@example.com' },
+    });
+  });
+
+  it('links existing email user to crossmintId (migration)', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-456',
+      email: 'test@example.com',
+    });
+    // First findUnique (by crossmintId) returns null
+    mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+    // Second findUnique (by email) returns existing user
+    mockPrisma.user.findUnique.mockResolvedValueOnce(MOCK_USER);
+    mockPrisma.user.update.mockResolvedValue({ ...MOCK_USER, crossmintId: 'crossmint-user-456' });
+    mockPrisma.authSession.create.mockResolvedValue(MOCK_SESSION);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { crossmintId: 'crossmint-user-456' },
+    });
+  });
+
+  it('does not return dynamicEoaAddress', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-456',
+      email: 'crossmint@example.com',
+    });
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue(MOCK_CROSSMINT_USER);
+    mockPrisma.authSession.create.mockResolvedValue(MOCK_SESSION);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt' },
+    });
+
+    const body = res.json();
+    expect(body.dynamicEoaAddress).toBeUndefined();
+  });
+});
 
 // ── Tests: POST /auth/dynamic/verify ─────────────────────────────────────────
 

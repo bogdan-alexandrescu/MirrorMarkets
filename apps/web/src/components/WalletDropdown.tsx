@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
+import { useAuth } from '@crossmint/client-sdk-react-ui';
 import { Copy, Check, LogOut, Wallet, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useMe, useMyWallets, useBalances } from '@/hooks/useApi';
@@ -12,7 +12,7 @@ export function WalletDropdown() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { user: dynamicUser, handleLogOut } = useDynamicContext();
+  const { user: crossmintUser, logout } = useAuth();
   const { data: me, isLoading: meLoading } = useMe();
   const { data: wallets, isLoading: walletsLoading } = useMyWallets();
   const { data: balances } = useBalances();
@@ -20,9 +20,9 @@ export function WalletDropdown() {
   const primaryWallet = wallets?.find((w) => w.type === 'POLY_PROXY') ?? wallets?.find((w) => w.type === 'DYNAMIC_EOA');
   const address = primaryWallet?.address;
 
-  // Fallback to Dynamic SDK user info while API data loads
-  const displayName = me?.name ?? me?.email ?? dynamicUser?.email ?? 'User';
-  const displayEmail = me?.email ?? dynamicUser?.email;
+  // Fallback to Crossmint user info while API data loads
+  const displayName = me?.name ?? me?.email ?? crossmintUser?.email ?? 'User';
+  const displayEmail = me?.email ?? crossmintUser?.email;
   const hasToken = !!api.getToken();
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export function WalletDropdown() {
       // Ignore errors — session may already be expired
     }
     api.setToken(null);
-    await handleLogOut();
+    logout();
     window.location.href = '/';
   };
 
