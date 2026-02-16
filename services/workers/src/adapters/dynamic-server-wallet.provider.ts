@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
 import type {
   TradingAuthorityProvider,
   EIP712TypedData,
@@ -8,7 +7,7 @@ import type {
 } from '@mirrormarkets/shared';
 import { AppError, ErrorCodes } from '@mirrormarkets/shared';
 
-const DYNAMIC_API_BASE = 'https://app.dynamicauth.com/api/v0';
+const CROSSMINT_API_VERSION = '2025-06-09';
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
 
@@ -18,7 +17,11 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * DynamicServerWalletProvider — Worker-side.
- * Identical logic to the API-side provider but reads config from env vars.
+ *
+ * Uses Crossmint REST API for signing operations. Wallets are created by
+ * the API service; the worker only reads existing wallets and signs.
+ *
+ * Falls back to Dynamic REST API if CROSSMINT_API_KEY is not set (legacy).
  */
 export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   constructor(private prisma: PrismaClient) {}
@@ -31,10 +34,13 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
   async signTypedData(userId: string, typedData: EIP712TypedData): Promise<string> {
     const sw = await this.requireReady(userId);
-    const result = await this.callDynamic<{ signature: string }>(
-      `server-wallets/${sw.dynamicServerWalletId}/sign-typed-data`,
+    const result = await this.callCrossmint<{ signature: string }>(
+      `wallets/${sw.dynamicServerWalletId}/signatures`,
       'POST',
-      { typedData: JSON.stringify(typedData), chain: 'EVM' },
+      {
+        type: 'evm-typed-data',
+        params: { typedData },
+      },
     );
     return result.signature;
   }
@@ -44,13 +50,12 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const messageStr = typeof message === 'string'
       ? message
       : Buffer.from(message).toString('hex');
-    const result = await this.callDynamic<{ signature: string }>(
-      `server-wallets/${sw.dynamicServerWalletId}/sign`,
+    const result = await this.callCrossmint<{ signature: string }>(
+      `wallets/${sw.dynamicServerWalletId}/signatures`,
       'POST',
       {
-        message: messageStr,
-        encoding: typeof message === 'string' ? 'utf8' : 'hex',
-        chain: 'EVM',
+        type: 'evm-message',
+        params: { message: messageStr },
       },
     );
     return result.signature;
@@ -58,16 +63,26 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
   async executeTransaction(userId: string, tx: TransactionRequest): Promise<TransactionResult> {
     const sw = await this.requireReady(userId);
-    const result = await this.callDynamic<{ hash: string; status: string }>(
-      `server-wallets/${sw.dynamicServerWalletId}/sign-transaction`,
+    const result = await this.callCrossmint<{ txId?: string; hash?: string; status?: string }>(
+      `wallets/${sw.dynamicServerWalletId}/transactions`,
       'POST',
       {
-        transaction: { to: tx.to, data: tx.data, value: tx.value ?? '0', chainId: tx.chainId ?? 137 },
-        chain: 'EVM',
-        broadcast: true,
+        params: {
+          calls: [
+            {
+              to: tx.to,
+              data: tx.data,
+              value: tx.value ?? '0',
+            },
+          ],
+          chain: 'polygon',
+        },
       },
     );
-    return { hash: result.hash, status: result.status === 'confirmed' ? 'confirmed' : 'submitted' };
+    return {
+      hash: result.txId ?? result.hash ?? '',
+      status: result.status === 'confirmed' ? 'confirmed' : 'submitted',
+    };
   }
 
   private async requireReady(userId: string) {
@@ -78,20 +93,21 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     return sw;
   }
 
-  private async callDynamic<T>(path: string, method: 'GET' | 'POST', body?: Record<string, unknown>): Promise<T> {
-    const apiKey = process.env.DYNAMIC_API_KEY ?? '';
-    const url = `${DYNAMIC_API_BASE}/${path}`;
+  private async callCrossmint<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
+    const apiKey = process.env.CROSSMINT_API_KEY ?? '';
+    const baseUrl = process.env.CROSSMINT_BASE_URL ?? 'https://api.crossmint.com';
+    const url = `${baseUrl}/${CROSSMINT_API_VERSION}/${path}`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         const res = await fetch(url, {
           method,
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'X-API-KEY': apiKey,
             'Content-Type': 'application/json',
           },
           body: body ? JSON.stringify(body) : undefined,
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(30_000),
         });
 
         if (res.status === 429) {
@@ -100,12 +116,12 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
             await sleep(retryAfter * 1000);
             continue;
           }
-          throw new AppError(ErrorCodes.RATE_LIMITED, 'Dynamic API rate limited', 429);
+          throw new AppError(ErrorCodes.RATE_LIMITED, 'Crossmint API rate limited', 429);
         }
 
         if (!res.ok) {
           const errorBody = await res.text();
-          throw new Error(`Dynamic API ${method} ${path}: ${res.status} ${errorBody}`);
+          throw new Error(`Crossmint API ${method} ${path}: ${res.status} ${errorBody}`);
         }
 
         return (await res.json()) as T;
@@ -119,6 +135,6 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       }
     }
 
-    throw new Error('Exhausted retries for Dynamic API');
+    throw new Error('Exhausted retries for Crossmint API');
   }
 }
