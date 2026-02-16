@@ -6,12 +6,10 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api-client';
 
 function AuthSync({ children }: { children: React.ReactNode }) {
-  const { jwt, status } = useAuth();
+  const { jwt, user, status } = useAuth();
   const verifiedRef = useRef(false);
 
   useEffect(() => {
-    console.log('[AuthSync] status:', status, 'jwt:', jwt ? `${jwt.slice(0, 20)}...` : undefined, 'hasToken:', !!api.getToken(), 'verified:', verifiedRef.current);
-
     if (status !== 'logged-in' || !jwt || verifiedRef.current) return;
 
     // If we already have a backend session, just redirect
@@ -24,23 +22,23 @@ function AuthSync({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        console.log('[AuthSync] Verifying Crossmint JWT with backend...');
-        const res = await api.post<{ token: string }>('/auth/crossmint/verify', { token: jwt });
+        const res = await api.post<{ token: string }>('/auth/crossmint/verify', {
+          token: jwt,
+          ...(user?.email ? { email: user.email } : {}),
+        });
         api.setToken(res.token);
-        console.log('[AuthSync] Backend session created, provisioning wallet...');
         try {
           await api.post('/wallets/provision', {});
         } catch {
           // Continue even if provisioning fails
         }
-        console.log('[AuthSync] Redirecting to dashboard');
         window.location.href = '/dashboard';
       } catch (err) {
         console.error('[AuthSync] Backend auth verify failed:', err);
         verifiedRef.current = false;
       }
     })();
-  }, [jwt, status]);
+  }, [jwt, user, status]);
 
   return <>{children}</>;
 }

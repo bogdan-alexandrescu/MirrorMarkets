@@ -6,12 +6,13 @@ const JWKS = jose.createRemoteJWKSet(
 );
 
 export class CrossmintAuthAdapter {
-  async verifyToken(token: string): Promise<{ userId: string; email: string }> {
+  async verifyToken(token: string): Promise<{ userId: string; email?: string }> {
     try {
       const { payload } = await jose.jwtVerify(token, JWKS);
+      const email = (payload as Record<string, unknown>).email as string | undefined;
       return {
         userId: payload.sub as string,
-        email: (payload as Record<string, unknown>).email as string,
+        ...(email ? { email } : {}),
       };
     } catch {
       throw new UnauthorizedError('Invalid Crossmint JWT');

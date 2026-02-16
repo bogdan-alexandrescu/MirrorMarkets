@@ -13,17 +13,18 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /auth/crossmint/verify
   app.post('/crossmint/verify', async (request, reply) => {
-    const { token } = verifyTokenSchema.parse(request.body);
-    const { userId: crossmintId, email } = await crossmintAuthAdapter.verifyToken(token);
+    const { token, email: bodyEmail } = verifyTokenSchema.parse(request.body);
+    const { userId: crossmintId, email: jwtEmail } = await crossmintAuthAdapter.verifyToken(token);
+    const email = jwtEmail ?? bodyEmail;
 
     // Upsert user by crossmintId
     let user = await app.prisma.user.findUnique({ where: { crossmintId } });
     if (user) {
       user = await app.prisma.user.update({
         where: { crossmintId },
-        data: { email },
+        data: { ...(email ? { email } : {}) },
       });
-    } else {
+    } else if (email) {
       // Check if a user with this email already exists (migrating from Dynamic)
       const existingByEmail = await app.prisma.user.findUnique({ where: { email } });
       if (existingByEmail) {
@@ -36,6 +37,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           data: { crossmintId, email },
         });
       }
+    } else {
+      return reply.status(400).send({
+        code: 'VALIDATION_ERROR',
+        message: 'Email is required for new user registration',
+      });
     }
 
     // Create session
