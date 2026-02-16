@@ -36,13 +36,16 @@ export class ProvisioningService {
 
     const walletTypes = new Set(wallets.map((w) => w.type));
 
+    // Mock wallets (from dev/test) are not real — treat them as not ready
+    const isMockWallet = serverWallet?.dynamicServerWalletId?.startsWith('mock-') ?? false;
+
     const status: ProvisioningStatus = {
       dynamicEoa: walletTypes.has('DYNAMIC_EOA'),
       tradingEoa: walletTypes.has('TRADING_EOA'),
-      serverWallet: walletTypes.has('SERVER_WALLET'),
+      serverWallet: walletTypes.has('SERVER_WALLET') && !isMockWallet,
       serverWalletCreating: serverWallet?.status === 'CREATING',
-      serverWalletReady: serverWallet?.status === 'READY',
-      polyProxy: walletTypes.has('POLY_PROXY'),
+      serverWalletReady: serverWallet?.status === 'READY' && !isMockWallet,
+      polyProxy: walletTypes.has('POLY_PROXY') && !isMockWallet,
       clobApiKey: !!creds?.apiKey,
       copyProfile: !!copyProfile,
       bindingProof: !!bindingProof,
