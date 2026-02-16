@@ -10,7 +10,7 @@ function AuthSync({ children }: { children: React.ReactNode }) {
   const verifiedRef = useRef(false);
 
   useEffect(() => {
-    if (status !== 'logged-in' || !jwt || verifiedRef.current) return;
+    if (status !== 'logged-in' || !jwt || !user?.email || verifiedRef.current) return;
 
     // If we already have a backend session, just redirect
     if (api.getToken()) {
