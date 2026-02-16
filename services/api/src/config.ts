@@ -14,11 +14,11 @@ const configSchema = z.object({
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
-  // Dynamic.xyz
+  // Dynamic.xyz (deprecated — kept for legacy /auth/dynamic/verify route)
   DYNAMIC_ENVIRONMENT_ID: z.string().default(''),
   DYNAMIC_PUBLIC_KEY: z.string().default(''),
 
-  // Dynamic Server Wallets (Phase 2A — legacy, replaced by Crossmint)
+  // Dynamic Server Wallets (deprecated — replaced by Crossmint)
   DYNAMIC_API_KEY: z.string().default(''),
   DYNAMIC_SERVER_WALLET_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
 

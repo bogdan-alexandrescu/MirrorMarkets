@@ -1,10 +1,37 @@
 'use client';
 
-import { DynamicContextProvider, getAuthToken } from '@dynamic-labs/sdk-react-core';
-import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
+import { CrossmintProvider, CrossmintAuthProvider, useAuth } from '@crossmint/client-sdk-react-ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api-client';
+
+function AuthSync({ children }: { children: React.ReactNode }) {
+  const { jwt, status } = useAuth();
+  const verifiedRef = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'logged-in' || !jwt || api.getToken() || verifiedRef.current) return;
+    verifiedRef.current = true;
+
+    (async () => {
+      try {
+        const res = await api.post<{ token: string }>('/auth/crossmint/verify', { token: jwt });
+        api.setToken(res.token);
+        try {
+          await api.post('/wallets/provision', {});
+        } catch {
+          // Continue even if provisioning fails
+        }
+        window.location.href = '/dashboard';
+      } catch (err) {
+        console.error('Backend auth verify failed:', err);
+        verifiedRef.current = false;
+      }
+    })();
+  }, [jwt, status]);
+
+  return <>{children}</>;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,37 +47,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <DynamicContextProvider
-      settings={{
-        environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID ?? '',
-        walletConnectors: [EthereumWalletConnectors],
-        events: {
-          onAuthSuccess: async ({ user: authUser }) => {
-            // Dynamic auth complete — verify with our backend and get a session token
-            const dynamicJwt = getAuthToken();
-            console.log('[auth] onAuthSuccess fired, user:', authUser?.email, 'jwt:', dynamicJwt ? 'present' : 'null', 'existingToken:', !!api.getToken());
-            if (!dynamicJwt || api.getToken()) return;
-
-            try {
-              const res = await api.post<{ token: string; dynamicEoaAddress?: string | null }>('/auth/dynamic/verify', { token: dynamicJwt });
-              api.setToken(res.token);
-              // Auto-provision wallet
-              try {
-                await api.post('/wallets/provision', {
-                  dynamicEoaAddress: res.dynamicEoaAddress ?? undefined,
-                });
-              } catch {
-                // Continue even if provisioning fails
-              }
-              window.location.href = '/dashboard';
-            } catch (err) {
-              console.error('Backend auth verify failed:', err);
-            }
-          },
-        },
-      }}
-    >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </DynamicContextProvider>
+    <CrossmintProvider apiKey={process.env.NEXT_PUBLIC_CROSSMINT_CLIENT_API_KEY ?? ''}>
+      <CrossmintAuthProvider loginMethods={['email', 'google']}>
+        <QueryClientProvider client={queryClient}>
+          <AuthSync>{children}</AuthSync>
+        </QueryClientProvider>
+      </CrossmintAuthProvider>
+    </CrossmintProvider>
   );
 }

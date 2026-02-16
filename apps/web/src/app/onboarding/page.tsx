@@ -1,7 +1,6 @@
 'use client';
 
 import { useProvisioningStatus, useProvision } from '@/hooks/useApi';
-import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';

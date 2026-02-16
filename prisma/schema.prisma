@@ -194,9 +194,10 @@ enum AuditAction {
 // ─── Models ─────────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  dynamicId String   @unique @map("dynamic_id")
-  email     String   @unique
+  id          String   @id @default(cuid())
+  dynamicId   String?  @unique @map("dynamic_id")
+  crossmintId String?  @unique @map("crossmint_id")
+  email       String   @unique
   name      String?
   avatarUrl String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")

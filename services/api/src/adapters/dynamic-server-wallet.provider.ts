@@ -10,7 +10,6 @@ import type {
   SigningProvider,
 } from '@mirrormarkets/shared';
 import { AppError, ErrorCodes, SIGNING_CONFIG } from '@mirrormarkets/shared';
-import { DynamicApiError } from './dynamic-api.adapter.js';
 import { CrossmintApiError } from './crossmint-api.adapter.js';
 import { SigningRequestService } from '../services/signing-request.service.js';
 import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
@@ -371,7 +370,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
         if (attempt >= SIGNING_CONFIG.MAX_RETRY_ATTEMPTS) throw error;
 
         if (
-          (error instanceof DynamicApiError || error instanceof CrossmintApiError) &&
+          error instanceof CrossmintApiError &&
           error.errorType === 'RATE_LIMITED'
         ) {
           const delay = (error.retryAfterSeconds ?? 2) * 1000;
