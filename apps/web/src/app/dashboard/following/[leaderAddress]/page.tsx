@@ -1,19 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { useLeader, useLeaderEvents, useCopyLogsForLeader } from '@/hooks/useApi';
+import { useLeader, useLeaderEvents, useCopyLogsForLeader, useFollows, useRemoveFollow } from '@/hooks/useApi';
 import { shortenAddress, formatUsd, formatPnl } from '@mirrormarkets/shared';
 
 export default function LeaderDetailPage() {
-  const { leaderId } = useParams<{ leaderId: string }>();
-  const { data: leader, isLoading: leaderLoading, error: leaderError } = useLeader(leaderId);
+  const { leaderAddress } = useParams<{ leaderAddress: string }>();
+  const router = useRouter();
+  const { data: leader, isLoading: leaderLoading, error: leaderError } = useLeader(leaderAddress);
+  const { data: follows } = useFollows();
+  const removeFollow = useRemoveFollow();
   const [eventsPage, setEventsPage] = useState(1);
   const [logsPage, setLogsPage] = useState(1);
-  const { data: events, isLoading: eventsLoading } = useLeaderEvents(leaderId, eventsPage);
-  const { data: copyLogs, isLoading: logsLoading } = useCopyLogsForLeader(leaderId, logsPage);
+  const { data: events, isLoading: eventsLoading } = useLeaderEvents(leaderAddress, eventsPage);
+  const { data: copyLogs, isLoading: logsLoading } = useCopyLogsForLeader(leaderAddress, logsPage);
+
+  const follow = follows?.find((f) => f.leader.address.toLowerCase() === leaderAddress.toLowerCase());
+
+  const handleUnfollow = () => {
+    if (!follow) return;
+    removeFollow.mutate(follow.id, {
+      onSuccess: () => router.push('/dashboard/following'),
+    });
+  };
 
   if (leaderLoading) {
     return <p className="text-gray-500">Loading leader...</p>;
@@ -104,6 +116,15 @@ export default function LeaderDetailPage() {
               </div>
             </div>
           </div>
+          {follow && (
+            <button
+              onClick={handleUnfollow}
+              disabled={removeFollow.isPending}
+              className="shrink-0 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              {removeFollow.isPending ? 'Unfollowing...' : 'Unfollow'}
+            </button>
+          )}
         </div>
       </div>
 

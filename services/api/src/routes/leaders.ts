@@ -39,15 +39,21 @@ export const leaderRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(dbLeaders);
   });
 
-  // GET /leaders/:leaderId
+  // Resolve a leader by internal ID or wallet address
+  async function resolveLeader(idOrAddress: string) {
+    const isAddress = idOrAddress.startsWith('0x');
+    return app.prisma.leader.findUnique({
+      where: isAddress ? { address: idOrAddress.toLowerCase() } : { id: idOrAddress },
+    });
+  }
+
+  // GET /leaders/:leaderId  (accepts internal ID or wallet address)
   app.get('/:leaderId', {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
     const { leaderId } = request.params as { leaderId: string };
 
-    const leader = await app.prisma.leader.findUnique({
-      where: { id: leaderId },
-    });
+    const leader = await resolveLeader(leaderId);
 
     if (!leader) {
       throw new AppError(ErrorCodes.NOT_FOUND, 'Leader not found', 404);
@@ -56,16 +62,14 @@ export const leaderRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(leader);
   });
 
-  // GET /leaders/:leaderId/events
+  // GET /leaders/:leaderId/events  (accepts internal ID or wallet address)
   app.get('/:leaderId/events', {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
     const { leaderId } = request.params as { leaderId: string };
     const { page, pageSize } = paginationSchema.parse(request.query);
 
-    const leader = await app.prisma.leader.findUnique({
-      where: { id: leaderId },
-    });
+    const leader = await resolveLeader(leaderId);
 
     if (!leader) {
       throw new AppError(ErrorCodes.NOT_FOUND, 'Leader not found', 404);
@@ -73,12 +77,12 @@ export const leaderRoutes: FastifyPluginAsync = async (app) => {
 
     const [items, total] = await Promise.all([
       app.prisma.leaderEvent.findMany({
-        where: { leaderId },
+        where: { leaderId: leader.id },
         orderBy: { detectedAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      app.prisma.leaderEvent.count({ where: { leaderId } }),
+      app.prisma.leaderEvent.count({ where: { leaderId: leader.id } }),
     ]);
 
     return reply.send({
