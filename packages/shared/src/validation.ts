@@ -11,6 +11,7 @@ export const verifyDynamicSchema = z.object({
 
 export const verifyTokenSchema = z.object({
   token: z.string().min(1),
+  email: z.string().email().optional(),
 });
 
 // Follows

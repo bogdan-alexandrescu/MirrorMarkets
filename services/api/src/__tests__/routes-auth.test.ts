@@ -242,6 +242,42 @@ describe('POST /auth/crossmint/verify', () => {
     });
   });
 
+  it('uses email from request body when JWT has no email', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-789',
+    });
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue({ ...MOCK_CROSSMINT_USER, crossmintId: 'crossmint-user-789' });
+    mockPrisma.authSession.create.mockResolvedValue(MOCK_SESSION);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt', email: 'from-body@example.com' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.create).toHaveBeenCalledWith({
+      data: { crossmintId: 'crossmint-user-789', email: 'from-body@example.com' },
+    });
+  });
+
+  it('returns 400 when neither JWT nor body has email for new user', async () => {
+    mockCrossmintVerify.mockResolvedValue({
+      userId: 'crossmint-user-789',
+    });
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/crossmint/verify',
+      payload: { token: 'valid-crossmint-jwt' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+  });
+
   it('links existing email user to crossmintId (migration)', async () => {
     mockCrossmintVerify.mockResolvedValue({
       userId: 'crossmint-user-456',
