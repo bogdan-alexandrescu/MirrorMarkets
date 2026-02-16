@@ -11,10 +11,13 @@ interface Props {
     volume?: number;
     rank?: number | null;
   };
+  isFollowing?: boolean;
   onFollow: () => void;
+  onUnfollow?: () => void;
+  isPending?: boolean;
 }
 
-export function LeaderCard({ leader, onFollow }: Props) {
+export function LeaderCard({ leader, isFollowing, onFollow, onUnfollow, isPending }: Props) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-start justify-between">
@@ -59,12 +62,23 @@ export function LeaderCard({ leader, onFollow }: Props) {
         </div>
       </div>
 
-      <button
-        onClick={onFollow}
-        className="mt-3 w-full rounded-lg border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-600 transition hover:bg-brand-50 dark:hover:bg-brand-900/20"
-      >
-        Follow
-      </button>
+      {isFollowing ? (
+        <button
+          onClick={onUnfollow}
+          disabled={isPending}
+          className="mt-3 w-full rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+        >
+          {isPending ? 'Unfollowing...' : 'Unfollow'}
+        </button>
+      ) : (
+        <button
+          onClick={onFollow}
+          disabled={isPending}
+          className="mt-3 w-full rounded-lg border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-600 transition hover:bg-brand-50 disabled:opacity-50 dark:hover:bg-brand-900/20"
+        >
+          {isPending ? 'Following...' : 'Follow'}
+        </button>
+      )}
     </div>
   );
 }

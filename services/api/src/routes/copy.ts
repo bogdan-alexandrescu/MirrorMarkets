@@ -91,7 +91,18 @@ export const copyRoutes: FastifyPluginAsync = async (app) => {
 
     const where: any = { userId: request.userId };
     if (leaderId) {
-      where.leaderEvent = { leaderId };
+      // Accept wallet address (0x...) or internal ID
+      if (leaderId.startsWith('0x')) {
+        const leader = await app.prisma.leader.findUnique({ where: { address: leaderId.toLowerCase() } });
+        if (leader) {
+          where.leaderEvent = { leaderId: leader.id };
+        } else {
+          // No leader found — return empty results
+          return reply.send({ items: [], total: 0, page: 1, pageSize: 10, hasMore: false });
+        }
+      } else {
+        where.leaderEvent = { leaderId };
+      }
     }
 
     const [items, total] = await Promise.all([

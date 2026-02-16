@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useFollows } from '@/hooks/useApi';
+import { useFollows, useRemoveFollow } from '@/hooks/useApi';
 import { shortenAddress, formatUsd, formatPnl } from '@mirrormarkets/shared';
 
 export default function FollowingPage() {
   const { data: follows, isLoading, error } = useFollows();
+  const removeFollow = useRemoveFollow();
 
   return (
     <div className="space-y-6">
@@ -22,52 +23,56 @@ export default function FollowingPage() {
       ) : follows && follows.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {follows.map((follow) => (
-            <Link
+            <div
               key={follow.id}
-              href={`/dashboard/following/${follow.leader.id}`}
-              className="rounded-lg border border-gray-200 bg-white p-4 transition hover:border-brand-300 hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-brand-700"
+              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  {follow.leader.profileImageUrl ? (
-                    <img
-                      src={follow.leader.profileImageUrl}
-                      alt=""
-                      className="h-10 w-10 rounded-full bg-gray-100"
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
-                      {(follow.leader.displayName ?? follow.leader.address)[0]?.toUpperCase()}
+              <Link
+                href={`/dashboard/following/${follow.leader.address}`}
+                className="block transition hover:opacity-80"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {follow.leader.profileImageUrl ? (
+                      <img
+                        src={follow.leader.profileImageUrl}
+                        alt=""
+                        className="h-10 w-10 rounded-full bg-gray-100"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
+                        {(follow.leader.displayName ?? follow.leader.address)[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {follow.leader.displayName ?? shortenAddress(follow.leader.address)}
+                      </p>
+                      <p className="text-xs text-gray-500">{shortenAddress(follow.leader.address)}</p>
                     </div>
+                  </div>
+                  {follow.leader.rank && (
+                    <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                      #{follow.leader.rank}
+                    </span>
                   )}
+                </div>
+
+                <div className="mt-3 flex gap-4 text-sm">
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      {follow.leader.displayName ?? shortenAddress(follow.leader.address)}
-                    </p>
-                    <p className="text-xs text-gray-500">{shortenAddress(follow.leader.address)}</p>
+                    <span className="text-gray-500">PnL </span>
+                    <span className={`font-medium ${(follow.leader.pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatPnl(follow.leader.pnl ?? 0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Volume </span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {formatUsd(follow.leader.volume ?? 0)}
+                    </span>
                   </div>
                 </div>
-                {follow.leader.rank && (
-                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                    #{follow.leader.rank}
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-3 flex gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">PnL </span>
-                  <span className={`font-medium ${(follow.leader.pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPnl(follow.leader.pnl ?? 0)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Volume </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {formatUsd(follow.leader.volume ?? 0)}
-                  </span>
-                </div>
-              </div>
+              </Link>
 
               <div className="mt-3 flex items-center justify-between">
                 <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -77,9 +82,15 @@ export default function FollowingPage() {
                 }`}>
                   {follow.status}
                 </span>
-                <span className="text-xs text-brand-600">View details →</span>
+                <button
+                  onClick={() => removeFollow.mutate(follow.id)}
+                  disabled={removeFollow.isPending}
+                  className="rounded px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  {removeFollow.isPending ? 'Unfollowing...' : 'Unfollow'}
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       ) : (
