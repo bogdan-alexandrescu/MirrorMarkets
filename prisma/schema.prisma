@@ -111,6 +111,7 @@ enum SigningPurpose {
 
 enum SigningProvider {
   DYNAMIC_SERVER_WALLET
+  CROSSMINT
   MOCK
 }
 

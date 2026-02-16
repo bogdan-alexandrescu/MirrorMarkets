@@ -81,7 +81,7 @@ export type SigningPurpose =
   | 'BINDING_PROOF'
   | 'OTHER';
 
-export type SigningProvider = 'DYNAMIC_SERVER_WALLET' | 'MOCK';
+export type SigningProvider = 'DYNAMIC_SERVER_WALLET' | 'CROSSMINT' | 'MOCK';
 
 export interface SigningRequestInput {
   userId: string;

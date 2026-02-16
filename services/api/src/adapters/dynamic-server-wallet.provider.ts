@@ -2,13 +2,16 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type {
   TradingAuthorityProvider,
+  DynamicServerWalletAdapter,
   EIP712TypedData,
   TransactionRequest,
   TransactionResult,
   SigningPurpose,
+  SigningProvider,
 } from '@mirrormarkets/shared';
 import { AppError, ErrorCodes, SIGNING_CONFIG } from '@mirrormarkets/shared';
-import { DynamicApiAdapter, DynamicApiError } from './dynamic-api.adapter.js';
+import { DynamicApiError } from './dynamic-api.adapter.js';
+import { CrossmintApiError } from './crossmint-api.adapter.js';
 import { SigningRequestService } from '../services/signing-request.service.js';
 import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
 import { SigningCircuitBreaker } from '../services/signing-circuit-breaker.js';
@@ -29,27 +32,30 @@ import { AuditService } from '../services/audit.service.js';
  *   - Retry with exponential backoff
  */
 export class DynamicServerWalletProvider implements TradingAuthorityProvider {
-  private adapter: DynamicApiAdapter;
+  private adapter: DynamicServerWalletAdapter;
   private signingService: SigningRequestService;
   private rateLimiter: SigningRateLimiter;
   private circuitBreaker: SigningCircuitBreaker;
   private auditService: AuditService;
+  private providerName: SigningProvider;
 
   constructor(
     private prisma: PrismaClient,
-    deps?: {
-      adapter?: DynamicApiAdapter;
+    deps: {
+      adapter: DynamicServerWalletAdapter;
+      providerName?: SigningProvider;
       signingService?: SigningRequestService;
       rateLimiter?: SigningRateLimiter;
       circuitBreaker?: SigningCircuitBreaker;
       auditService?: AuditService;
     },
   ) {
-    this.auditService = deps?.auditService ?? new AuditService(prisma);
-    this.adapter = deps?.adapter ?? new DynamicApiAdapter();
-    this.signingService = deps?.signingService ?? new SigningRequestService(prisma);
-    this.rateLimiter = deps?.rateLimiter ?? new SigningRateLimiter(this.auditService);
-    this.circuitBreaker = deps?.circuitBreaker ?? new SigningCircuitBreaker(this.auditService);
+    this.auditService = deps.auditService ?? new AuditService(prisma);
+    this.adapter = deps.adapter;
+    this.providerName = deps.providerName ?? 'DYNAMIC_SERVER_WALLET';
+    this.signingService = deps.signingService ?? new SigningRequestService(prisma);
+    this.rateLimiter = deps.rateLimiter ?? new SigningRateLimiter(this.auditService);
+    this.circuitBreaker = deps.circuitBreaker ?? new SigningCircuitBreaker(this.auditService);
   }
 
   // ── Accessors for health check / admin ──────────────────────────────
@@ -98,7 +104,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       requestType: 'TYPED_DATA',
       purpose: 'CLOB_ORDER',
       payload: typedData,
-      execute: async (walletId) => this.adapter.signTypedData(walletId, typedData),
+      execute: async (externalWalletId) => this.adapter.signTypedData(externalWalletId, typedData),
     });
   }
 
@@ -112,7 +118,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       requestType: 'MESSAGE',
       purpose: 'CLOB_API_KEY',
       payload: { message: messageStr },
-      execute: async (walletId) => this.adapter.signMessage(walletId, messageStr),
+      execute: async (externalWalletId) => this.adapter.signMessage(externalWalletId, messageStr),
     });
   }
 
@@ -126,7 +132,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       requestType: 'TX',
       purpose: 'WITHDRAW',
       payload: tx,
-      provider: 'DYNAMIC_SERVER_WALLET',
+      provider: this.providerName,
     });
 
     const { id: requestId } = await this.signingService.create(input);
@@ -134,7 +140,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
     try {
       const result = await this.retryWithBackoff(
-        () => this.adapter.sendTransaction(sw.address, tx),
+        () => this.adapter.sendTransaction(sw.dynamicServerWalletId, tx),
       );
 
       await this.signingService.markSucceeded(requestId, result.hash);
@@ -210,7 +216,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       requestType,
       purpose,
       payload,
-      provider: 'DYNAMIC_SERVER_WALLET',
+      provider: this.providerName,
     });
 
     // Idempotency check — return cached signature if already succeeded
@@ -229,7 +235,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     await this.signingService.markSent(requestId);
 
     try {
-      const signature = await this.retryWithBackoff(() => execute(sw.address));
+      const signature = await this.retryWithBackoff(() => execute(sw.dynamicServerWalletId));
 
       await this.signingService.markSucceeded(requestId, signature);
       await this.circuitBreaker.recordSuccess();
@@ -364,7 +370,10 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       } catch (error) {
         if (attempt >= SIGNING_CONFIG.MAX_RETRY_ATTEMPTS) throw error;
 
-        if (error instanceof DynamicApiError && error.errorType === 'RATE_LIMITED') {
+        if (
+          (error instanceof DynamicApiError || error instanceof CrossmintApiError) &&
+          error.errorType === 'RATE_LIMITED'
+        ) {
           const delay = (error.retryAfterSeconds ?? 2) * 1000;
           await sleep(delay);
           continue;
