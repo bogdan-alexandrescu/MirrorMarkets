@@ -50,15 +50,20 @@ export default function SettingsPage() {
       {/* Provisioning Status */}
       <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          Provisioning Status
+          Account Status
         </h2>
         {provisioning ? (
           <div className="space-y-2">
-            {Object.entries(provisioning).map(([key, value]) => (
+            {([
+              ['serverWallet', 'Signing Wallet'],
+              ['polyProxy', 'Trading Wallet'],
+              ['copyProfile', 'Copy Profile'],
+              ['complete', 'Ready to Trade'],
+            ] as const).map(([key, label]) => (
               <div key={key} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{key}</span>
-                <span className={`text-sm font-medium ${value ? 'text-green-600' : 'text-gray-400'}`}>
-                  {value ? 'Done' : 'Pending'}
+                <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+                <span className={`text-sm font-medium ${provisioning[key] ? 'text-green-600' : 'text-amber-500'}`}>
+                  {provisioning[key] ? 'Ready' : 'Setting up...'}
                 </span>
               </div>
             ))}

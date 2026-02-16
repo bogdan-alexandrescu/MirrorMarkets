@@ -24,16 +24,17 @@ export interface ServerWalletInfo {
 }
 
 export interface ProvisioningStatus {
-  dynamicEoa: boolean;
-  tradingEoa: boolean;
   serverWallet: boolean;
-  serverWalletCreating: boolean;
   serverWalletReady: boolean;
   polyProxy: boolean;
-  clobApiKey: boolean;
   copyProfile: boolean;
-  bindingProof: boolean;
   complete: boolean;
+  /** @deprecated Legacy fields kept for backwards compat */
+  dynamicEoa?: boolean;
+  tradingEoa?: boolean;
+  serverWalletCreating?: boolean;
+  clobApiKey?: boolean;
+  bindingProof?: boolean;
 }
 
 export interface LeaderInfo {

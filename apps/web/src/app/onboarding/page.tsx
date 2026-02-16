@@ -6,10 +6,8 @@ import { useEffect } from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 
 const STEPS = [
-  { key: 'dynamicEoa', label: 'Create identity wallet' },
-  { key: 'tradingEoa', label: 'Generate trading wallet' },
-  { key: 'polyProxy', label: 'Set up Polymarket proxy' },
-  { key: 'clobApiKey', label: 'Derive API credentials' },
+  { key: 'serverWallet', label: 'Create signing wallet' },
+  { key: 'polyProxy', label: 'Set up trading wallet' },
   { key: 'copyProfile', label: 'Initialize copy profile' },
 ] as const;
 
