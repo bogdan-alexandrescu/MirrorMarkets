@@ -65,7 +65,7 @@ function ProvisioningChecklist() {
     {
       label: 'Create server wallet',
       done: status.serverWalletReady,
-      inProgress: status.serverWalletCreating,
+      inProgress: status.serverWallet && !status.serverWalletReady,
       action: !status.serverWallet
         ? () => provision.mutate()
         : undefined,

@@ -26,12 +26,10 @@ export class ProvisioningService {
   ) {}
 
   async getStatus(userId: string): Promise<ProvisioningStatus> {
-    const [wallets, serverWallet, creds, copyProfile, bindingProof] = await Promise.all([
+    const [wallets, serverWallet, copyProfile] = await Promise.all([
       this.prisma.wallet.findMany({ where: { userId } }),
       this.prisma.serverWallet.findUnique({ where: { userId } }),
-      this.prisma.polymarketCredentials.findUnique({ where: { userId } }),
       this.prisma.copyProfile.findUnique({ where: { userId } }),
-      this.prisma.bindingProof.findUnique({ where: { userId } }),
     ]);
 
     const walletTypes = new Set(wallets.map((w) => w.type));
@@ -40,22 +38,15 @@ export class ProvisioningService {
     const isMockWallet = serverWallet?.dynamicServerWalletId?.startsWith('mock-') ?? false;
 
     const status: ProvisioningStatus = {
-      dynamicEoa: walletTypes.has('DYNAMIC_EOA'),
-      tradingEoa: walletTypes.has('TRADING_EOA'),
       serverWallet: walletTypes.has('SERVER_WALLET') && !isMockWallet,
-      serverWalletCreating: serverWallet?.status === 'CREATING',
       serverWalletReady: serverWallet?.status === 'READY' && !isMockWallet,
       polyProxy: walletTypes.has('POLY_PROXY') && !isMockWallet,
-      clobApiKey: !!creds?.apiKey,
       copyProfile: !!copyProfile,
-      bindingProof: !!bindingProof,
       complete: false,
     };
 
-    // Complete when: signing authority + proxy + profile (EOA and creds are optional for email auth)
-    const hasAuthority = status.serverWalletReady || status.tradingEoa;
     status.complete =
-      hasAuthority &&
+      status.serverWalletReady &&
       status.polyProxy &&
       status.copyProfile;
 
