@@ -10,6 +10,8 @@ import { AppError, ErrorCodes } from '@mirrormarkets/shared';
 const CROSSMINT_API_VERSION = '2025-06-09';
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
+const SIGNATURE_POLL_INTERVAL_MS = 1_000;
+const SIGNATURE_POLL_MAX_ATTEMPTS = 30;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,7 +23,8 @@ function sleep(ms: number): Promise<void> {
  * Uses Crossmint REST API for signing operations. Wallets are created by
  * the API service; the worker only reads existing wallets and signs.
  *
- * Falls back to Dynamic REST API if CROSSMINT_API_KEY is not set (legacy).
+ * Signing is async: POST creates a signature request, then we poll GET
+ * until status is "success" and read the outputSignature field.
  */
 export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   constructor(private prisma: PrismaClient) {}
@@ -34,15 +37,10 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
   async signTypedData(userId: string, typedData: EIP712TypedData): Promise<string> {
     const sw = await this.requireReady(userId);
-    const result = await this.callCrossmint<{ signature: string }>(
-      `wallets/${sw.dynamicServerWalletId}/signatures`,
-      'POST',
-      {
-        type: 'evm-typed-data',
-        params: { typedData },
-      },
-    );
-    return result.signature;
+    return this.signAndPoll(sw.dynamicServerWalletId, {
+      type: 'typed-data',
+      params: { chain: 'polygon', typedData },
+    });
   }
 
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
@@ -50,15 +48,10 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const messageStr = typeof message === 'string'
       ? message
       : Buffer.from(message).toString('hex');
-    const result = await this.callCrossmint<{ signature: string }>(
-      `wallets/${sw.dynamicServerWalletId}/signatures`,
-      'POST',
-      {
-        type: 'evm-message',
-        params: { message: messageStr },
-      },
-    );
-    return result.signature;
+    return this.signAndPoll(sw.dynamicServerWalletId, {
+      type: 'message',
+      params: { chain: 'polygon', message: messageStr },
+    });
   }
 
   async executeTransaction(userId: string, tx: TransactionRequest): Promise<TransactionResult> {
@@ -93,9 +86,52 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     return sw;
   }
 
+  /**
+   * Crossmint signing is async: POST creates a request, then poll GET
+   * until status is "success" and read the outputSignature field.
+   */
+  private async signAndPoll(walletId: string, body: unknown): Promise<string> {
+    const created = await this.callCrossmint<{ id: string; status: string; outputSignature?: string }>(
+      `wallets/${walletId}/signatures`,
+      'POST',
+      body,
+    );
+
+    if (created.status === 'success' && created.outputSignature) {
+      return created.outputSignature;
+    }
+
+    for (let i = 0; i < SIGNATURE_POLL_MAX_ATTEMPTS; i++) {
+      await sleep(SIGNATURE_POLL_INTERVAL_MS);
+
+      const result = await this.callCrossmint<{ status: string; outputSignature?: string }>(
+        `wallets/${walletId}/signatures/${created.id}`,
+        'GET',
+      );
+
+      if (result.status === 'success' && result.outputSignature) {
+        return result.outputSignature;
+      }
+
+      if (result.status === 'failed') {
+        throw new AppError(
+          ErrorCodes.SIGNING_UNAVAILABLE,
+          `Crossmint signature ${created.id} failed`,
+          503,
+        );
+      }
+    }
+
+    throw new AppError(
+      ErrorCodes.SIGNING_UNAVAILABLE,
+      `Crossmint signature ${created.id} timed out`,
+      504,
+    );
+  }
+
   private async callCrossmint<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
     const apiKey = process.env.CROSSMINT_API_KEY ?? '';
-    const baseUrl = process.env.CROSSMINT_BASE_URL ?? 'https://api.crossmint.com';
+    const baseUrl = process.env.CROSSMINT_BASE_URL ?? 'https://www.crossmint.com/api';
     const url = `${baseUrl}/${CROSSMINT_API_VERSION}/${path}`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
