@@ -12,9 +12,9 @@ function AuthSync({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status !== 'logged-in' || !jwt || !user?.email || verifiedRef.current) return;
 
-    // If we already have a backend session, just redirect
+    // Already have a backend session — nothing to do
     if (api.getToken()) {
-      window.location.href = '/dashboard';
+      verifiedRef.current = true;
       return;
     }
 
@@ -24,7 +24,7 @@ function AuthSync({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.post<{ token: string }>('/auth/crossmint/verify', {
           token: jwt,
-          ...(user?.email ? { email: user.email } : {}),
+          email: user.email,
         });
         api.setToken(res.token);
         try {
