@@ -27,6 +27,7 @@ export interface ProvisioningStatus {
   serverWallet: boolean;
   serverWalletReady: boolean;
   polyProxy: boolean;
+  clobCredentials: boolean;
   copyProfile: boolean;
   complete: boolean;
   /** @deprecated Legacy fields kept for backwards compat */

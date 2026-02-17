@@ -189,6 +189,7 @@ enum AuditAction {
   MODULE_TX_BLOCKED
   WITHDRAWAL_ALLOWLIST_ADDED
   WITHDRAWAL_ALLOWLIST_REMOVED
+  CLOB_CREDENTIALS_DERIVED
 }
 
 // ─── Models ─────────────────────────────────────────

@@ -28,8 +28,8 @@ export class PolymarketAdapter {
     tradingAuthority: TradingAuthorityProvider,
     userId: string,
     tradingAddress: string,
-    proxyAddress: string,
     credentials: PolymarketApiCredentials,
+    proxyAddress?: string,
   ) {
     const clobUrl = process.env.POLYMARKET_CLOB_API_URL ?? 'https://clob.polymarket.com';
     const signer = new ServerWalletSigner(tradingAuthority, userId, tradingAddress);
@@ -39,7 +39,7 @@ export class PolymarketAdapter {
       POLYGON_CHAIN_ID,
       signer as any,
       credentials,
-      SIGNATURE_TYPE.POLY_PROXY,
+      proxyAddress ? SIGNATURE_TYPE.POLY_PROXY : SIGNATURE_TYPE.EOA,
       proxyAddress,
     );
   }

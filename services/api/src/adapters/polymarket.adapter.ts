@@ -52,8 +52,8 @@ export class PolymarketAdapter {
     tradingAuthority: TradingAuthorityProvider,
     userId: string,
     tradingAddress: string,
-    proxyAddress: string,
     credentials: PolymarketApiCredentials,
+    proxyAddress?: string,
   ) {
     const config = getConfig();
     const signer = new ServerWalletSigner(tradingAuthority, userId, tradingAddress);
@@ -63,9 +63,27 @@ export class PolymarketAdapter {
       POLYGON_CHAIN_ID,
       signer as any, // ServerWalletSigner satisfies ethers v5 Signer ABI via duck-typing
       credentials,
-      SIGNATURE_TYPE.POLY_PROXY,
+      proxyAddress ? SIGNATURE_TYPE.POLY_PROXY : SIGNATURE_TYPE.EOA,
       proxyAddress,
     );
+  }
+
+  static async deriveApiKeyForUser(
+    tradingAuthority: TradingAuthorityProvider,
+    userId: string,
+    tradingAddress: string,
+  ): Promise<PolymarketApiCredentials> {
+    const config = getConfig();
+    const signer = new ServerWalletSigner(tradingAuthority, userId, tradingAddress);
+
+    const client = new ClobClient(
+      config.POLYMARKET_CLOB_API_URL,
+      POLYGON_CHAIN_ID,
+      signer as any,
+    );
+
+    const creds = await client.createApiKey();
+    return { key: creds.key, secret: creds.secret, passphrase: creds.passphrase };
   }
 
   async deriveApiKey(): Promise<PolymarketApiCredentials> {
