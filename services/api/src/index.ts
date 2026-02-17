@@ -32,6 +32,19 @@ async function main() {
     },
   });
 
+  // Handle empty body with Content-Type: application/json (e.g. DELETE requests)
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    if (!body || (typeof body === 'string' && body.trim() === '')) {
+      done(null, undefined);
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
   // Plugins
   await app.register(cors, {
     origin: config.CORS_ORIGINS.split(',').map((s) => s.trim()),
