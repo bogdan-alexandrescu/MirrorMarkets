@@ -28,7 +28,7 @@ export default function LeaderDetailPage() {
   };
 
   if (leaderLoading) {
-    return <p className="text-gray-500">Loading leader...</p>;
+    return <p className="text-[--text-muted]">Loading leader...</p>;
   }
 
   if (leaderError) {
@@ -36,13 +36,13 @@ export default function LeaderDetailPage() {
       <div className="space-y-4">
         <Link
           href="/dashboard/following"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1 text-sm text-[--text-secondary] hover:text-[--text-primary]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Following
         </Link>
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-          <p className="text-sm text-red-700 dark:text-red-400">
+        <div className="card border-[--accent-red]/30 bg-[--accent-red]/10 p-4">
+          <p className="text-sm text-[--accent-red]">
             Failed to load leader. {leaderError.message}
           </p>
         </div>
@@ -55,12 +55,12 @@ export default function LeaderDetailPage() {
       <div className="space-y-4">
         <Link
           href="/dashboard/following"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1 text-sm text-[--text-secondary] hover:text-[--text-primary]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Following
         </Link>
-        <p className="text-gray-500">Leader not found.</p>
+        <p className="text-[--text-muted]">Leader not found.</p>
       </div>
     );
   }
@@ -69,48 +69,46 @@ export default function LeaderDetailPage() {
     <div className="space-y-6">
       <Link
         href="/dashboard/following"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        className="inline-flex items-center gap-1 text-sm text-[--text-secondary] hover:text-[--text-primary]"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Following
       </Link>
 
       {/* Leader info card */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+      <div className="card p-6">
         <div className="flex items-start gap-4">
           {leader.profileImageUrl ? (
             <img
               src={leader.profileImageUrl}
               alt=""
-              className="h-16 w-16 rounded-full bg-gray-100"
+              className="h-16 w-16 rounded-full bg-[--bg-surface-lighter]"
             />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-bold text-brand-600">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/20 text-xl font-bold text-brand-400">
               {(leader.displayName ?? leader.address)[0]?.toUpperCase()}
             </div>
           )}
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-xl font-bold text-[--text-primary]">
                 {leader.displayName ?? shortenAddress(leader.address)}
               </h1>
               {leader.rank && (
-                <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-sm font-medium text-yellow-700">
-                  #{leader.rank}
-                </span>
+                <span className="badge-warning">#{leader.rank}</span>
               )}
             </div>
-            <p className="mt-1 text-sm text-gray-500">{leader.address}</p>
+            <p className="mt-1 text-sm text-[--text-muted]">{leader.address}</p>
             <div className="mt-3 flex gap-6 text-sm">
               <div>
-                <span className="text-gray-500">PnL </span>
-                <span className={`font-semibold ${leader.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <span className="text-[--text-secondary]">PnL </span>
+                <span className={`font-semibold ${leader.pnl >= 0 ? 'text-[--accent-green]' : 'text-[--accent-red]'}`}>
                   {formatPnl(leader.pnl)}
                 </span>
               </div>
               <div>
-                <span className="text-gray-500">Volume </span>
-                <span className="font-semibold text-gray-900 dark:text-white">
+                <span className="text-[--text-secondary]">Volume </span>
+                <span className="font-semibold text-[--text-primary]">
                   {formatUsd(leader.volume)}
                 </span>
               </div>
@@ -120,7 +118,7 @@ export default function LeaderDetailPage() {
             <button
               onClick={handleUnfollow}
               disabled={removeFollow.isPending}
-              className="shrink-0 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              className="btn-danger shrink-0"
             >
               {removeFollow.isPending ? 'Unfollowing...' : 'Unfollow'}
             </button>
@@ -130,42 +128,40 @@ export default function LeaderDetailPage() {
 
       {/* Recent Trades */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Recent Trades</h2>
+        <h2 className="section-title mb-3">Recent Trades</h2>
         {eventsLoading ? (
-          <p className="text-gray-500">Loading trades...</p>
+          <p className="text-[--text-muted]">Loading trades...</p>
         ) : events && events.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="table-wrapper">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Date</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Side</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Market</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Size</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Price</th>
+                    <th className="table-th">Date</th>
+                    <th className="table-th">Side</th>
+                    <th className="table-th">Market</th>
+                    <th className="table-th-right">Size</th>
+                    <th className="table-th-right">Price</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="table-body">
                   {events.items.map((event) => (
                     <tr key={event.id}>
-                      <td className="px-4 py-2 text-gray-500">
+                      <td className="table-td-secondary">
                         {new Date(event.detectedAt).toLocaleString()}
                       </td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                          event.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="table-td">
+                        <span className={event.side === 'BUY' ? 'badge-success' : 'badge-danger'}>
                           {event.side}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                      <td className="table-td">
                         {event.marketSlug ?? event.conditionId.slice(0, 12) + '...'}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-900 dark:text-white">
+                      <td className="table-td text-right font-mono">
                         {formatUsd(event.size)}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-900 dark:text-white">
+                      <td className="table-td text-right font-mono">
                         {event.price.toFixed(2)}
                       </td>
                     </tr>
@@ -177,80 +173,83 @@ export default function LeaderDetailPage() {
               <button
                 onClick={() => setEventsPage((p) => Math.max(1, p - 1))}
                 disabled={eventsPage === 1}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-500">Page {eventsPage}</span>
+              <span className="text-sm text-[--text-muted]">Page {eventsPage}</span>
               <button
                 onClick={() => setEventsPage((p) => p + 1)}
                 disabled={!events.hasMore}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Next
               </button>
             </div>
           </>
         ) : (
-          <p className="text-sm text-gray-500">No trades recorded yet.</p>
+          <p className="text-sm text-[--text-muted]">No trades recorded yet.</p>
         )}
       </div>
 
       {/* Copied Trades */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Copied Trades</h2>
+        <h2 className="section-title mb-3">Copied Trades</h2>
         {logsLoading ? (
-          <p className="text-gray-500">Loading copy logs...</p>
+          <p className="text-[--text-muted]">Loading copy logs...</p>
         ) : copyLogs && copyLogs.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="table-wrapper">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Date</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Status</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Side</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Market</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Size</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-500">Price</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Reason</th>
+                    <th className="table-th">Date</th>
+                    <th className="table-th">Status</th>
+                    <th className="table-th">Side</th>
+                    <th className="table-th">Market</th>
+                    <th className="table-th-right">Size</th>
+                    <th className="table-th-right">Price</th>
+                    <th className="table-th">Reason</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="table-body">
                   {copyLogs.items.map((item: any) => (
                     <tr key={item.id}>
-                      <td className="px-4 py-2 text-gray-500">
+                      <td className="table-td-secondary">
                         {new Date(item.createdAt).toLocaleString()}
                       </td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                          item.status === 'FILLED' ? 'bg-green-100 text-green-700' :
-                          item.status === 'FAILED' ? 'bg-red-100 text-red-700' :
-                          item.status === 'SKIPPED' ? 'bg-gray-100 text-gray-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
+                      <td className="table-td">
+                        <span
+                          className={
+                            item.status === 'FILLED'
+                              ? 'badge-success'
+                              : item.status === 'FAILED'
+                                ? 'badge-danger'
+                                : item.status === 'SKIPPED'
+                                  ? 'badge-neutral'
+                                  : 'badge-info'
+                          }
+                        >
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="table-td">
                         {item.leaderEvent && (
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                            item.leaderEvent.side === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
+                          <span className={item.leaderEvent.side === 'BUY' ? 'badge-success' : 'badge-danger'}>
                             {item.leaderEvent.side}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">
+                      <td className="table-td">
                         {item.leaderEvent?.marketSlug ?? '--'}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-900 dark:text-white">
+                      <td className="table-td text-right font-mono">
                         {item.leaderEvent ? formatUsd(item.leaderEvent.size) : '--'}
                       </td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-900 dark:text-white">
+                      <td className="table-td text-right font-mono">
                         {item.leaderEvent ? item.leaderEvent.price.toFixed(2) : '--'}
                       </td>
-                      <td className="px-4 py-2 text-xs text-gray-500">
+                      <td className="table-td-secondary text-xs">
                         {item.skipReason ?? item.errorMessage ?? ''}
                       </td>
                     </tr>
@@ -262,22 +261,22 @@ export default function LeaderDetailPage() {
               <button
                 onClick={() => setLogsPage((p) => Math.max(1, p - 1))}
                 disabled={logsPage === 1}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-500">Page {logsPage}</span>
+              <span className="text-sm text-[--text-muted]">Page {logsPage}</span>
               <button
                 onClick={() => setLogsPage((p) => p + 1)}
                 disabled={!copyLogs.hasMore}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Next
               </button>
             </div>
           </>
         ) : (
-          <p className="text-sm text-gray-500">No copied trades for this leader yet.</p>
+          <p className="text-sm text-[--text-muted]">No copied trades for this leader yet.</p>
         )}
       </div>
     </div>

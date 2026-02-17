@@ -36,26 +36,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="hidden w-64 border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:block">
-        <div className="flex h-16 items-center px-6">
-          <Link href="/dashboard" className="text-xl font-bold text-brand-600">
+      <aside className="hidden w-64 shrink-0 border-r border-[--border-default] bg-[--bg-surface-dark] lg:flex lg:flex-col">
+        <div className="flex h-16 items-center gap-2 px-6">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 shadow-lg shadow-brand-500/25" />
+          <Link href="/dashboard" className="text-lg font-bold text-white">
             Mirror Markets
           </Link>
         </div>
-        <nav className="space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-0.5 px-3 py-4">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'));
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   isActive
-                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                    ? 'bg-brand-500/10 text-brand-400 shadow-sm'
+                    : 'text-[--text-secondary] hover:bg-[--bg-surface-lighter] hover:text-white'
                 }`}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className={`h-[18px] w-[18px] ${isActive ? 'text-brand-400' : ''}`} />
                 {label}
               </Link>
             );
@@ -64,24 +65,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-hidden">
         {/* Top header */}
-        <div className="flex h-16 items-center justify-end border-b border-gray-200 px-6 dark:border-gray-800">
-          <WalletDropdown />
+        <div className="flex h-16 items-center justify-between border-b border-[--border-default] bg-[--bg-surface-dark]/80 px-4 backdrop-blur-sm sm:px-6">
+          <div className="lg:hidden">
+            <Link href="/dashboard" className="text-lg font-bold text-white">
+              MM
+            </Link>
+          </div>
+          <div className="ml-auto">
+            <WalletDropdown />
+          </div>
         </div>
         <SystemBanner />
         {/* Mobile nav */}
-        <div className="flex gap-2 overflow-x-auto border-b border-gray-200 px-4 py-2 dark:border-gray-800 lg:hidden">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-[--border-default] bg-[--bg-surface-dark] px-3 py-2 lg:hidden">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'));
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                   isActive
-                    ? 'bg-brand-100 text-brand-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-brand-500/15 text-brand-400'
+                    : 'text-[--text-secondary] hover:bg-[--bg-surface-lighter] hover:text-white'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -90,7 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </main>
     </div>
   );

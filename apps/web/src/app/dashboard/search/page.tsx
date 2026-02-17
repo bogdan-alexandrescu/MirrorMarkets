@@ -26,7 +26,7 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Search Traders</h1>
+      <h1 className="page-title">Search Traders</h1>
 
       <div className="flex gap-3">
         <input
@@ -35,18 +35,14 @@ export default function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           placeholder="Search by name or address..."
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          className="input-field flex-1"
         />
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          className="rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-        >
+        <button onClick={handleSearch} disabled={loading} className="btn-primary shrink-0 px-6">
           {loading ? 'Searching...' : 'Search'}
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {results.map((user: any) => (
           <LeaderCard
             key={user.address ?? user.id}
@@ -57,7 +53,7 @@ export default function SearchPage() {
       </div>
 
       {results.length === 0 && query && !loading && (
-        <p className="text-center text-gray-500">No traders found.</p>
+        <p className="text-center text-[--text-muted]">No traders found.</p>
       )}
     </div>
   );

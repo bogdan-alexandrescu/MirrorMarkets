@@ -10,23 +10,20 @@ export default function FollowingPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Following</h1>
+      <h1 className="page-title">Following</h1>
 
       {isLoading ? (
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-[--text-muted]">Loading...</p>
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-          <p className="text-sm text-red-700 dark:text-red-400">
+        <div className="card border-[--accent-red]/30 bg-[--accent-red]/10 p-4">
+          <p className="text-sm text-[--accent-red]">
             Failed to load follows. {error.message}
           </p>
         </div>
       ) : follows && follows.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {follows.map((follow) => (
-            <div
-              key={follow.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
-            >
+            <div key={follow.id} className="card p-4">
               <Link
                 href={`/dashboard/following/${follow.leader.address}`}
                 className="block transition hover:opacity-80"
@@ -37,37 +34,35 @@ export default function FollowingPage() {
                       <img
                         src={follow.leader.profileImageUrl}
                         alt=""
-                        className="h-10 w-10 rounded-full bg-gray-100"
+                        className="h-10 w-10 rounded-full bg-[--bg-surface-lighter]"
                       />
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500/20 text-sm font-bold text-brand-400">
                         {(follow.leader.displayName ?? follow.leader.address)[0]?.toUpperCase()}
                       </div>
                     )}
                     <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
+                      <p className="font-semibold text-[--text-primary]">
                         {follow.leader.displayName ?? shortenAddress(follow.leader.address)}
                       </p>
-                      <p className="text-xs text-gray-500">{shortenAddress(follow.leader.address)}</p>
+                      <p className="text-xs text-[--text-muted]">{shortenAddress(follow.leader.address)}</p>
                     </div>
                   </div>
                   {follow.leader.rank && (
-                    <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                      #{follow.leader.rank}
-                    </span>
+                    <span className="badge-warning">#{follow.leader.rank}</span>
                   )}
                 </div>
 
                 <div className="mt-3 flex gap-4 text-sm">
                   <div>
-                    <span className="text-gray-500">PnL </span>
-                    <span className={`font-medium ${(follow.leader.pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className="text-[--text-secondary]">PnL </span>
+                    <span className={`font-medium ${(follow.leader.pnl ?? 0) >= 0 ? 'text-[--accent-green]' : 'text-[--accent-red]'}`}>
                       {formatPnl(follow.leader.pnl ?? 0)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Volume </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
+                    <span className="text-[--text-secondary]">Volume </span>
+                    <span className="font-medium text-[--text-primary]">
                       {formatUsd(follow.leader.volume ?? 0)}
                     </span>
                   </div>
@@ -75,17 +70,21 @@ export default function FollowingPage() {
               </Link>
 
               <div className="mt-3 flex items-center justify-between">
-                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                  follow.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
-                  follow.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-gray-100 text-gray-700'
-                }`}>
+                <span
+                  className={
+                    follow.status === 'ACTIVE'
+                      ? 'badge-success'
+                      : follow.status === 'PAUSED'
+                        ? 'badge-warning'
+                        : 'badge-neutral'
+                  }
+                >
                   {follow.status}
                 </span>
                 <button
                   onClick={() => removeFollow.mutate(follow.id)}
                   disabled={removeFollow.isPending}
-                  className="rounded px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  className="rounded px-3 py-1 text-xs font-medium text-[--accent-red] transition hover:bg-[--accent-red]/10 disabled:opacity-50"
                 >
                   {removeFollow.isPending ? 'Unfollowing...' : 'Unfollow'}
                 </button>
@@ -94,10 +93,10 @@ export default function FollowingPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-gray-500">
+        <div className="card p-8 text-center">
+          <p className="text-[--text-muted]">
             You&apos;re not following anyone yet. Visit the{' '}
-            <Link href="/dashboard/leaderboard" className="text-brand-600 hover:underline">
+            <Link href="/dashboard/leaderboard" className="text-brand-400 hover:underline">
               Leaderboard
             </Link>{' '}
             to find traders.

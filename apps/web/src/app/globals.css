@@ -3,19 +3,137 @@
 @tailwind utilities;
 
 :root {
-  --foreground: #171717;
-  --background: #ffffff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground: #ededed;
-    --background: #0a0a0a;
-  }
+  --bg-page: #0B111D;
+  --bg-surface: #111827;
+  --bg-surface-dark: #0D1420;
+  --bg-surface-light: #1A2332;
+  --bg-surface-lighter: #1F2A44;
+  --text-primary: #E7ECF7;
+  --text-secondary: #717892;
+  --text-muted: #5B6C8D;
+  --border-default: #1A2332;
+  --border-accent: #2A3441;
+  --accent-green: #65FD51;
+  --accent-red: #FF532D;
+  --accent-gold: #FFBC30;
+  --accent-cyan: #45D1FF;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  /* Cards */
+  .card {
+    @apply rounded-xl border border-[--border-default] bg-[--bg-surface];
+  }
+  .card-hover {
+    @apply card transition hover:border-[--border-accent] hover:bg-[--bg-surface-light];
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full rounded-lg border border-[--border-accent] bg-[--bg-surface-dark] px-3 py-2 text-sm text-white placeholder-[--text-muted] transition focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 transition hover:bg-brand-600 disabled:opacity-50 disabled:shadow-none;
+  }
+  .btn-danger {
+    @apply rounded-lg bg-[--accent-red] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/20 transition hover:brightness-110 disabled:opacity-50 disabled:shadow-none;
+  }
+  .btn-success {
+    @apply rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-50 disabled:shadow-none;
+  }
+  .btn-ghost {
+    @apply rounded-lg border border-[--border-accent] px-4 py-2.5 text-sm font-medium text-[--text-primary] transition hover:bg-[--bg-surface-lighter];
+  }
+
+  /* Badges */
+  .badge-success {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    background: rgb(101 253 81 / 0.1);
+    color: var(--accent-green);
+  }
+  .badge-danger {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    background: rgb(255 83 45 / 0.1);
+    color: var(--accent-red);
+  }
+  .badge-warning {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    background: rgb(255 188 48 / 0.1);
+    color: var(--accent-gold);
+  }
+  .badge-info {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    background: rgb(69 209 255 / 0.1);
+    color: var(--accent-cyan);
+  }
+  .badge-neutral {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    background: var(--bg-surface-lighter);
+    color: var(--text-secondary);
+  }
+
+  /* Tables */
+  .table-wrapper {
+    @apply overflow-x-auto rounded-xl border border-[--border-default];
+  }
+  .table-base {
+    @apply w-full text-sm;
+  }
+  .table-head {
+    @apply bg-[--bg-surface-dark];
+  }
+  .table-th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[--text-muted];
+  }
+  .table-th-right {
+    @apply table-th text-right;
+  }
+  .table-body {
+    @apply divide-y divide-[--border-default] bg-[--bg-surface];
+  }
+  .table-td {
+    @apply px-4 py-3 text-[--text-primary];
+  }
+  .table-td-secondary {
+    @apply px-4 py-3 text-[--text-secondary];
+  }
+
+  /* Page headings */
+  .page-title {
+    @apply text-2xl font-bold text-white;
+  }
+  .section-title {
+    @apply text-lg font-semibold text-white;
+  }
+
+  /* Pagination buttons */
+  .pagination-btn {
+    @apply rounded-lg px-3 py-1.5 text-sm font-medium text-[--text-secondary] transition hover:bg-[--bg-surface-lighter] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[--text-secondary];
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-surface-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }

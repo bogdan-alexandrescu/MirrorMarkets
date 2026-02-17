@@ -10,48 +10,46 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+      <h1 className="page-title">Settings</h1>
 
       {/* Profile */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Profile</h2>
+      <div className="card p-6">
+        <h2 className="section-title mb-4">Profile</h2>
         <dl className="space-y-3">
           <div>
-            <dt className="text-sm text-gray-500">Email</dt>
-            <dd className="text-gray-900 dark:text-white">{user?.email ?? '--'}</dd>
+            <dt className="text-sm text-[--text-secondary]">Email</dt>
+            <dd className="text-[--text-primary]">{user?.email ?? '--'}</dd>
           </div>
           <div>
-            <dt className="text-sm text-gray-500">User ID</dt>
-            <dd className="font-mono text-xs text-gray-600 dark:text-gray-400">{user?.id ?? '--'}</dd>
+            <dt className="text-sm text-[--text-secondary]">User ID</dt>
+            <dd className="font-mono text-xs text-[--text-muted]">{user?.id ?? '--'}</dd>
           </div>
         </dl>
       </div>
 
       {/* Wallets */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Wallets</h2>
+      <div className="card p-6">
+        <h2 className="section-title mb-4">Wallets</h2>
         <div className="space-y-3">
           {wallets?.map((w) => (
             <div key={w.type} className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-sm font-medium text-[--text-secondary]">
                 {w.type.replace(/_/g, ' ')}
               </span>
-              <span className="font-mono text-xs text-gray-600 dark:text-gray-400">
+              <span className="font-mono text-xs text-[--text-muted]">
                 {shortenAddress(w.address, 6)}
               </span>
             </div>
           ))}
           {(!wallets || wallets.length === 0) && (
-            <p className="text-sm text-gray-500">No wallets provisioned.</p>
+            <p className="text-sm text-[--text-muted]">No wallets provisioned.</p>
           )}
         </div>
       </div>
 
       {/* Provisioning Status */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-          Account Status
-        </h2>
+      <div className="card p-6">
+        <h2 className="section-title mb-4">Account Status</h2>
         {provisioning ? (
           <div className="space-y-2">
             {([
@@ -61,15 +59,15 @@ export default function SettingsPage() {
               ['complete', 'Ready to Trade'],
             ] as const).map(([key, label]) => (
               <div key={key} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-                <span className={`text-sm font-medium ${provisioning[key] ? 'text-green-600' : 'text-amber-500'}`}>
+                <span className="text-sm text-[--text-secondary]">{label}</span>
+                <span className={`text-sm font-medium ${provisioning[key] ? 'text-[--accent-green]' : 'text-[--accent-gold]'}`}>
                   {provisioning[key] ? 'Ready' : 'Setting up...'}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className="text-sm text-[--text-muted]">Loading...</p>
         )}
       </div>
     </div>
