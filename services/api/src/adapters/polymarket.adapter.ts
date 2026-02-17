@@ -124,10 +124,33 @@ export class PolymarketAdapter {
 
   static async searchUsers(query: string): Promise<LeaderFromApi[]> {
     const config = getConfig();
-    // Detect wallet address vs username
-    const param = query.startsWith('0x') ? `address=${encodeURIComponent(query)}` : `userName=${encodeURIComponent(query)}`;
+
+    // Wallet address lookup — fetch a single trade to get profile metadata
+    if (query.startsWith('0x')) {
+      const address = query.toLowerCase();
+      const res = await fetch(
+        `${config.POLYMARKET_DATA_API_URL}/trades?maker=${address}&limit=1`,
+      );
+      if (!res.ok) return [];
+      const trades = await res.json();
+      if (!Array.isArray(trades) || trades.length === 0) {
+        // No trades found — return minimal result so the user can still follow
+        return [{ address, displayName: null, profileImageUrl: null, pnl: 0, volume: 0, rank: 0 }];
+      }
+      const t = trades[0];
+      return [{
+        address,
+        displayName: t.name || t.pseudonym || null,
+        profileImageUrl: t.profileImage || t.profileImageOptimized || null,
+        pnl: 0,
+        volume: 0,
+        rank: 0,
+      }];
+    }
+
+    // Username search via leaderboard
     const res = await fetch(
-      `${config.POLYMARKET_DATA_API_URL}/v1/leaderboard?${param}&timePeriod=ALL&limit=20`,
+      `${config.POLYMARKET_DATA_API_URL}/v1/leaderboard?userName=${encodeURIComponent(query)}&timePeriod=ALL&limit=20`,
     );
     if (!res.ok) throw new Error(`User search failed: ${res.status}`);
     const raw = await res.json();
