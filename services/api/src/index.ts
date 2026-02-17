@@ -22,6 +22,7 @@ import { systemRoutes } from './routes/system.js';
 import { adminRoutes } from './routes/admin.js';
 import { bindingProofRoutes } from './routes/binding-proof.js';
 import { safeAutomationRoutes } from './routes/safe-automation.js';
+import { syncRoutes } from './routes/sync.js';
 
 async function main() {
   const config = getConfig();
@@ -78,6 +79,7 @@ async function main() {
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(bindingProofRoutes, { prefix: '/binding-proof' });
   await app.register(safeAutomationRoutes, { prefix: '/safe-automation' });
+  await app.register(syncRoutes, { prefix: '/sync' });
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

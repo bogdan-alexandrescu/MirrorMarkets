@@ -1,6 +1,6 @@
 'use client';
 
-import { useCopyProfile, useEnableCopy, useDisableCopy, useFollows, useCopyLogs, useBalances } from '@/hooks/useApi';
+import { useCopyProfile, useEnableCopy, useDisableCopy, useFollows, useCopyLogs, useBalances, useSyncLogs } from '@/hooks/useApi';
 import { useSSE } from '@/hooks/useSSE';
 import { DaemonLogPanel } from '@/components/DaemonLogPanel';
 import { GuardrailForm } from '@/components/GuardrailForm';
@@ -11,9 +11,11 @@ export default function CopyTradePage() {
   const { data: follows } = useFollows();
   const { data: balances } = useBalances();
   const { data: logs } = useCopyLogs();
+  const { data: syncLogs } = useSyncLogs();
   const enableCopy = useEnableCopy();
   const disableCopy = useDisableCopy();
   const { events, connected } = useSSE('/copy/logs/stream', profile?.status === 'ENABLED');
+  const { events: syncEvents, connected: syncConnected } = useSSE('/sync/logs/stream', true);
 
   const isEnabled = profile?.status === 'ENABLED';
 
@@ -50,7 +52,14 @@ export default function CopyTradePage() {
 
       {profile && <GuardrailForm profile={profile} />}
 
-      <DaemonLogPanel events={events} connected={connected} recentLogs={logs?.items ?? []} />
+      <DaemonLogPanel
+        events={events}
+        connected={connected}
+        recentLogs={logs?.items ?? []}
+        syncEvents={syncEvents}
+        syncConnected={syncConnected}
+        recentSyncLogs={syncLogs?.items ?? []}
+      />
     </div>
   );
 }
