@@ -48,10 +48,17 @@ export class CopyEngine {
       },
     });
 
-    // Find all followers with copy enabled
+    await this.processCopiesForEvent(leaderEvent);
+  }
+
+  /**
+   * Find all copy-enabled followers for a leader event and execute copies.
+   * Called from both processLeaderEvent (new events) and the 15s poll (already-synced events).
+   */
+  async processCopiesForEvent(leaderEvent: any): Promise<void> {
     const follows = await this.prisma.follow.findMany({
       where: {
-        leaderId: event.leaderId,
+        leaderId: leaderEvent.leaderId,
         status: 'ACTIVE',
         user: {
           copyProfile: {
@@ -71,7 +78,7 @@ export class CopyEngine {
       },
     });
 
-    this.logger.info({ leaderId: event.leaderId, followers: follows.length }, 'Processing leader event for followers');
+    this.logger.info({ leaderId: leaderEvent.leaderId, followers: follows.length }, 'Processing leader event for followers');
 
     for (const follow of follows) {
       await this.processCopyForUser(follow.user, leaderEvent);

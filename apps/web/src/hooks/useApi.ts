@@ -15,6 +15,7 @@ import type {
   UserProfile,
   WalletInfo,
   AutoClaimSettingsInfo,
+  SyncLogInfo,
 } from '@mirrormarkets/shared';
 
 // User
@@ -258,6 +259,16 @@ export function useUpdateAutoClaim() {
     mutationFn: (data: { enabled: boolean; minClaimableUsd?: number }) =>
       api.put('/claims/auto-claim', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['auto-claim'] }),
+  });
+}
+
+// Sync Logs
+export function useSyncLogs(page = 1) {
+  return useQuery({
+    queryKey: ['sync-logs', page],
+    queryFn: () => api.get<PaginatedResponse<SyncLogInfo>>(`/sync/logs?page=${page}&pageSize=50`),
+    enabled: !!api.getToken(),
+    refetchInterval: 10_000,
   });
 }
 

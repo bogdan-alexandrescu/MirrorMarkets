@@ -165,9 +165,19 @@ export interface AuditLogInfo {
 }
 
 export interface SSEEvent {
-  type: 'copy_attempt' | 'order_update' | 'fill' | 'audit' | 'system' | 'signing' | 'module_tx';
+  type: 'copy_attempt' | 'order_update' | 'fill' | 'audit' | 'system' | 'signing' | 'module_tx' | 'sync_log';
   data: Record<string, unknown>;
   timestamp: string;
+}
+
+export interface SyncLogInfo {
+  id: string;
+  leaderAddress: string;
+  leaderName: string | null;
+  tradesFound: number;
+  message: string;
+  level: 'info' | 'warn' | 'error';
+  createdAt: string;
 }
 
 export interface PaginatedResponse<T> {

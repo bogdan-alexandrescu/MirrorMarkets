@@ -659,3 +659,18 @@ model ModuleTx {
   @@index([status])
   @@map("module_txs")
 }
+
+// ─── Sync Logs (global trade-sync telemetry) ────────
+
+model SyncLog {
+  id            String   @id @default(cuid())
+  leaderAddress String   @map("leader_address")
+  leaderName    String?  @map("leader_name")
+  tradesFound   Int      @default(0) @map("trades_found")
+  message       String
+  level         String   @default("info") // info, warn, error
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("sync_logs")
+}
