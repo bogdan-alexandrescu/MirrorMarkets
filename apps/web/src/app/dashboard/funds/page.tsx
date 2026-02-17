@@ -14,21 +14,21 @@ export default function FundsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Funds</h1>
+      <h1 className="page-title">Funds</h1>
 
       {/* Balance overview */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-sm text-gray-500">USDC Balance</p>
-          <p className="text-lg font-semibold">{balances ? formatUsd(balances.usdc) : '--'}</p>
+        <div className="card p-4">
+          <p className="text-sm text-[--text-secondary]">USDC Balance</p>
+          <p className="text-lg font-semibold text-[--text-primary]">{balances ? formatUsd(balances.usdc) : '--'}</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-sm text-gray-500">In Positions</p>
-          <p className="text-lg font-semibold">{balances ? formatUsd(balances.positions) : '--'}</p>
+        <div className="card p-4">
+          <p className="text-sm text-[--text-secondary]">In Positions</p>
+          <p className="text-lg font-semibold text-[--text-primary]">{balances ? formatUsd(balances.positions) : '--'}</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-sm text-gray-500">Total Value</p>
-          <p className="text-lg font-semibold">{balances ? formatUsd(balances.total) : '--'}</p>
+        <div className="card p-4">
+          <p className="text-sm text-[--text-secondary]">Total Value</p>
+          <p className="text-lg font-semibold text-[--text-primary]">{balances ? formatUsd(balances.total) : '--'}</p>
         </div>
       </div>
 
@@ -42,36 +42,38 @@ export default function FundsPage() {
 
       {/* Withdrawal history */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
-          Withdrawal History
-        </h2>
+        <h2 className="section-title mb-3">Withdrawal History</h2>
         {withdrawals && withdrawals.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+            <div className="table-wrapper">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Amount</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Destination</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Status</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-500">Date</th>
+                    <th className="table-th">Amount</th>
+                    <th className="table-th">Destination</th>
+                    <th className="table-th">Status</th>
+                    <th className="table-th">Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="table-body">
                   {withdrawals.items.map((w: any) => (
                     <tr key={w.id}>
-                      <td className="px-4 py-2">{formatUsd(w.amount)}</td>
-                      <td className="px-4 py-2 font-mono text-xs">{w.destinationAddr}</td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                          w.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
-                          w.status === 'FAILED' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
+                      <td className="table-td">{formatUsd(w.amount)}</td>
+                      <td className="table-td font-mono text-xs">{w.destinationAddr}</td>
+                      <td className="table-td">
+                        <span
+                          className={
+                            w.status === 'CONFIRMED'
+                              ? 'badge-success'
+                              : w.status === 'FAILED'
+                                ? 'badge-danger'
+                                : 'badge-warning'
+                          }
+                        >
                           {w.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-gray-500">
+                      <td className="table-td-secondary">
                         {new Date(w.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
@@ -83,22 +85,22 @@ export default function FundsPage() {
               <button
                 onClick={() => setWithdrawalPage((p) => Math.max(1, p - 1))}
                 disabled={withdrawalPage === 1}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-500">Page {withdrawalPage}</span>
+              <span className="text-sm text-[--text-muted]">Page {withdrawalPage}</span>
               <button
                 onClick={() => setWithdrawalPage((p) => p + 1)}
                 disabled={!withdrawals.hasMore}
-                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                className="pagination-btn"
               >
                 Next
               </button>
             </div>
           </>
         ) : (
-          <p className="text-sm text-gray-500">No withdrawals yet.</p>
+          <p className="text-sm text-[--text-muted]">No withdrawals yet.</p>
         )}
       </div>
     </div>

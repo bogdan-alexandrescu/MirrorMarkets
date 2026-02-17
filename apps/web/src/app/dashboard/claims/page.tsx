@@ -12,13 +12,13 @@ export default function ClaimsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Claims</h1>
+      <h1 className="page-title">Claims</h1>
 
       {/* Auto-claim toggle */}
-      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+      <div className="card flex items-center justify-between p-4">
         <div>
-          <p className="font-medium text-gray-900 dark:text-white">Auto-Claim</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-medium text-[--text-primary]">Auto-Claim</p>
+          <p className="text-sm text-[--text-secondary]">
             Automatically redeem resolved positions
           </p>
         </div>
@@ -27,7 +27,7 @@ export default function ClaimsPage() {
             updateAutoClaim.mutate({ enabled: !autoClaim?.enabled })
           }
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-            autoClaim?.enabled ? 'bg-brand-600' : 'bg-gray-300'
+            autoClaim?.enabled ? 'bg-brand-500' : 'bg-[--bg-surface-lighter]'
           }`}
         >
           <span
@@ -40,7 +40,7 @@ export default function ClaimsPage() {
 
       {/* Claimable positions */}
       {isLoading ? (
-        <p className="text-gray-500">Loading claimable positions...</p>
+        <p className="text-[--text-muted]">Loading claimable positions...</p>
       ) : claimable && claimable.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {claimable.map((item: any) => (
@@ -55,7 +55,7 @@ export default function ClaimsPage() {
           ))}
         </div>
       ) : (
-        <p className="text-gray-500">No claimable positions at this time.</p>
+        <p className="text-[--text-muted]">No claimable positions at this time.</p>
       )}
     </div>
   );

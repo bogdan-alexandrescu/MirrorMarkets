@@ -19,46 +19,38 @@ interface Props {
 
 export function LeaderCard({ leader, isFollowing, onFollow, onUnfollow, isPending }: Props) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+    <div className="card p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           {leader.profileImageUrl ? (
-            <img
-              src={leader.profileImageUrl}
-              alt=""
-              className="h-10 w-10 rounded-full bg-gray-100"
-            />
+            <img src={leader.profileImageUrl} alt="" className="h-10 w-10 rounded-full bg-[--bg-surface-light]" />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500/15 text-sm font-bold text-brand-400">
               {(leader.displayName ?? leader.address)[0]?.toUpperCase()}
             </div>
           )}
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white">
+            <p className="font-semibold text-white">
               {leader.displayName ?? shortenAddress(leader.address)}
             </p>
-            <p className="text-xs text-gray-500">{shortenAddress(leader.address)}</p>
+            <p className="text-xs text-[--text-muted]">{shortenAddress(leader.address)}</p>
           </div>
         </div>
         {leader.rank && (
-          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-            #{leader.rank}
-          </span>
+          <span className="badge-warning">#{leader.rank}</span>
         )}
       </div>
 
       <div className="mt-3 flex gap-4 text-sm">
         <div>
-          <span className="text-gray-500">PnL </span>
-          <span className={`font-medium ${(leader.pnl ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <span className="text-[--text-muted]">PnL </span>
+          <span className={`font-medium ${(leader.pnl ?? 0) >= 0 ? 'text-[--accent-green]' : 'text-[--accent-red]'}`}>
             {formatPnl(leader.pnl ?? 0)}
           </span>
         </div>
         <div>
-          <span className="text-gray-500">Volume </span>
-          <span className="font-medium text-gray-900 dark:text-white">
-            {formatUsd(leader.volume ?? 0)}
-          </span>
+          <span className="text-[--text-muted]">Volume </span>
+          <span className="font-medium text-white">{formatUsd(leader.volume ?? 0)}</span>
         </div>
       </div>
 
@@ -66,7 +58,7 @@ export function LeaderCard({ leader, isFollowing, onFollow, onUnfollow, isPendin
         <button
           onClick={onUnfollow}
           disabled={isPending}
-          className="mt-3 w-full rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+          className="mt-3 w-full rounded-lg border border-[--accent-red]/30 px-3 py-2 text-sm font-medium text-[--accent-red] transition hover:bg-[--accent-red]/10 disabled:opacity-50"
         >
           {isPending ? 'Unfollowing...' : 'Unfollow'}
         </button>
@@ -74,7 +66,7 @@ export function LeaderCard({ leader, isFollowing, onFollow, onUnfollow, isPendin
         <button
           onClick={onFollow}
           disabled={isPending}
-          className="mt-3 w-full rounded-lg border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-600 transition hover:bg-brand-50 disabled:opacity-50 dark:hover:bg-brand-900/20"
+          className="btn-primary mt-3 w-full"
         >
           {isPending ? 'Following...' : 'Follow'}
         </button>

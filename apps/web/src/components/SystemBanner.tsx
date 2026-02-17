@@ -9,8 +9,8 @@ export function SystemBanner() {
   if (!status || status.api === 'ok') return null;
 
   return (
-    <div className="flex items-center gap-2 bg-yellow-50 px-4 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
-      <AlertTriangle className="h-4 w-4" />
+    <div className="flex items-center gap-2 bg-[--accent-gold]/10 px-4 py-2.5 text-sm text-[--accent-gold]">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
       <span>
         System is experiencing issues.
         {status.database === 'down' && ' Database is down.'}

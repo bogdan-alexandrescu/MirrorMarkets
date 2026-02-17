@@ -11,10 +11,10 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders</h1>
+      <h1 className="page-title">Orders</h1>
 
       {isLoading ? (
-        <p className="text-gray-500">Loading orders...</p>
+        <p className="text-[--text-muted]">Loading orders...</p>
       ) : data && data.items.length > 0 ? (
         <>
           <OrderTable
@@ -25,22 +25,22 @@ export default function OrdersPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              className="pagination-btn"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-500">Page {page}</span>
+            <span className="text-sm text-[--text-muted]">Page {page}</span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={!data.hasMore}
-              className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              className="pagination-btn"
             >
               Next
             </button>
           </div>
         </>
       ) : (
-        <p className="text-gray-500">No orders yet.</p>
+        <p className="text-[--text-muted]">No orders yet.</p>
       )}
     </div>
   );
