@@ -59,12 +59,12 @@ export class WalletService {
       this.tradingAuthority,
       userId,
       tradingAddress,
-      proxyAddress,
       {
         key: creds.apiKey,
         secret: creds.apiSecret,
         passphrase: creds.passphrase,
       },
+      creds.isProxyDeployed ? proxyAddress : undefined,
     );
   }
 

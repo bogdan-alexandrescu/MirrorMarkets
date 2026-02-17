@@ -7,6 +7,7 @@ import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 
 const STEPS = [
   { key: 'serverWallet', label: 'Create signing wallet' },
+  { key: 'clobCredentials', label: 'Connect to Polymarket' },
   { key: 'polyProxy', label: 'Set up trading wallet' },
   { key: 'copyProfile', label: 'Initialize copy profile' },
 ] as const;

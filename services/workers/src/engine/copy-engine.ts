@@ -193,12 +193,12 @@ export class CopyEngine {
         this.tradingAuthority,
         user.id,
         tradingAddress,
-        proxyWallet.address,
         {
           key: creds.apiKey,
           secret: creds.apiSecret,
           passphrase: creds.passphrase,
         },
+        creds.isProxyDeployed ? proxyWallet.address : undefined,
       );
 
       const orderResult = await adapter.createOrder({

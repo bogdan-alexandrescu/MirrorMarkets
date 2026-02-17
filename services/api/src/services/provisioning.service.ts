@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import type { TradingAuthorityProvider, ProvisioningStatus } from '@mirrormarkets/shared';
 import { AuditService } from './audit.service.js';
 import { getConfig } from '../config.js';
+import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
 
 /**
  * ProvisioningService — Phase 2A
@@ -26,10 +27,11 @@ export class ProvisioningService {
   ) {}
 
   async getStatus(userId: string): Promise<ProvisioningStatus> {
-    const [wallets, serverWallet, copyProfile] = await Promise.all([
+    const [wallets, serverWallet, copyProfile, polyCreds] = await Promise.all([
       this.prisma.wallet.findMany({ where: { userId } }),
       this.prisma.serverWallet.findUnique({ where: { userId } }),
       this.prisma.copyProfile.findUnique({ where: { userId } }),
+      this.prisma.polymarketCredentials.findUnique({ where: { userId } }),
     ]);
 
     const walletTypes = new Set(wallets.map((w) => w.type));
@@ -41,6 +43,7 @@ export class ProvisioningService {
       serverWallet: walletTypes.has('SERVER_WALLET') && !isMockWallet,
       serverWalletReady: serverWallet?.status === 'READY' && !isMockWallet,
       polyProxy: walletTypes.has('POLY_PROXY') && !isMockWallet,
+      clobCredentials: !!polyCreds,
       copyProfile: !!copyProfile,
       complete: false,
     };
@@ -48,6 +51,7 @@ export class ProvisioningService {
     status.complete =
       status.serverWalletReady &&
       status.polyProxy &&
+      status.clobCredentials &&
       status.copyProfile;
 
     return status;
@@ -98,22 +102,29 @@ export class ProvisioningService {
     });
 
     if (!existingCreds) {
-      // For Phase 2A the PolymarketAdapter needs to be initialized with a
-      // signer that delegates to the server wallet.  The CLOB client's
-      // createApiKey() signs a message — we do that through our authority.
-      //
-      // [DVC-5] Verify that createApiKey() signature can be generated
-      // via signMessage on the server wallet rather than a local ethers Wallet.
-      //
-      // For now, we skip auto-derivation and let it be triggered on first
-      // order attempt if needed (the CLOB client handshakes lazily).
-      try {
-        // Attempt to store placeholder — credentials are derived on first
-        // adapter usage via the signing authority.
-        // This is a design decision: credential derivation is deferred.
-      } catch {
-        // Continue provisioning even if cred derivation fails
-      }
+      const creds = await PolymarketAdapter.deriveApiKeyForUser(
+        this.tradingAuthority,
+        userId,
+        tradingAddress,
+      );
+
+      await this.prisma.polymarketCredentials.create({
+        data: {
+          userId,
+          apiKey: creds.key,
+          apiSecret: creds.secret,
+          passphrase: creds.passphrase,
+          proxyAddress: tradingAddress,
+          isProxyDeployed: false,
+        },
+      });
+
+      await this.audit.log({
+        userId,
+        action: 'CLOB_CREDENTIALS_DERIVED',
+        details: { proxyAddress: tradingAddress },
+        ipAddress,
+      });
     }
 
     // Step 4: Store proxy address (placeholder — relayer deploys on first tx)
