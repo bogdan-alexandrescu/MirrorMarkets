@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api-client';
-import { useCreateFollow } from '@/hooks/useApi';
+import { useCreateFollow, useFollows, useRemoveFollow } from '@/hooks/useApi';
 import { LeaderCard } from '@/components/LeaderCard';
 
 export default function SearchPage() {
@@ -10,6 +10,19 @@ export default function SearchPage() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const createFollow = useCreateFollow();
+  const removeFollow = useRemoveFollow();
+  const { data: follows } = useFollows();
+
+  const followedAddresses = new Set(
+    (follows ?? []).map((f: any) => f.leader?.address?.toLowerCase()),
+  );
+
+  const getFollowId = (address: string) => {
+    const follow = (follows ?? []).find(
+      (f: any) => f.leader?.address?.toLowerCase() === address.toLowerCase(),
+    );
+    return follow?.id;
+  };
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -43,13 +56,23 @@ export default function SearchPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {results.map((user: any) => (
-          <LeaderCard
-            key={user.address ?? user.id}
-            leader={user}
-            onFollow={() => createFollow.mutate(user.address)}
-          />
-        ))}
+        {results.map((user: any) => {
+          const addr = user.address?.toLowerCase();
+          const isFollowing = followedAddresses.has(addr);
+          return (
+            <LeaderCard
+              key={user.address ?? user.id}
+              leader={user}
+              isFollowing={isFollowing}
+              onFollow={() => createFollow.mutate(user.address)}
+              onUnfollow={() => {
+                const fid = getFollowId(user.address);
+                if (fid) removeFollow.mutate(fid);
+              }}
+              isPending={createFollow.isPending || removeFollow.isPending}
+            />
+          );
+        })}
       </div>
 
       {results.length === 0 && query && !loading && (
