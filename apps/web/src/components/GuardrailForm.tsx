@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUpdateCopyProfile } from '@/hooks/useApi';
 import type { CopyProfileInfo } from '@mirrormarkets/shared';
 
@@ -16,11 +16,21 @@ export function GuardrailForm({ profile }: Props) {
     minOdds: profile.minOdds,
     maxOdds: profile.maxOdds,
   });
+  const [saved, setSaved] = useState(false);
 
   const update = useUpdateCopyProfile();
 
+  // Clear saved indicator after 3 seconds
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 3000);
+    return () => clearTimeout(t);
+  }, [saved]);
+
   const handleSave = () => {
-    update.mutate(form);
+    update.mutate(form, {
+      onSuccess: () => setSaved(true),
+    });
   };
 
   return (
@@ -48,9 +58,19 @@ export function GuardrailForm({ profile }: Props) {
           </div>
         ))}
       </div>
-      <button onClick={handleSave} disabled={update.isPending} className="btn-primary mt-5">
-        {update.isPending ? 'Saving...' : 'Save Guardrails'}
-      </button>
+      <div className="mt-5 flex items-center gap-3">
+        <button onClick={handleSave} disabled={update.isPending} className="btn-primary">
+          {update.isPending ? 'Saving...' : 'Save Guardrails'}
+        </button>
+        {saved && (
+          <span className="text-sm text-[--accent-green]">Saved</span>
+        )}
+        {update.isError && (
+          <span className="text-sm text-[--accent-red]">
+            {update.error instanceof Error ? update.error.message : 'Failed to save'}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
