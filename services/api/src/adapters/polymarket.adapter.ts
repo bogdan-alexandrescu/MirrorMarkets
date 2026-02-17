@@ -124,8 +124,10 @@ export class PolymarketAdapter {
 
   static async searchUsers(query: string): Promise<LeaderFromApi[]> {
     const config = getConfig();
+    // Detect wallet address vs username
+    const param = query.startsWith('0x') ? `address=${encodeURIComponent(query)}` : `userName=${encodeURIComponent(query)}`;
     const res = await fetch(
-      `${config.POLYMARKET_DATA_API_URL}/v1/leaderboard?userName=${encodeURIComponent(query)}&timePeriod=ALL&limit=20`,
+      `${config.POLYMARKET_DATA_API_URL}/v1/leaderboard?${param}&timePeriod=ALL&limit=20`,
     );
     if (!res.ok) throw new Error(`User search failed: ${res.status}`);
     const raw = await res.json();
