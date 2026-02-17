@@ -101,16 +101,14 @@ export class CopyTradingWorker {
     const lastSync = leader.lastSyncedAt ? leader.lastSyncedAt.getTime() : 0;
 
     for (const trade of trades) {
-      const tradeTime = new Date(trade.timestamp ?? trade.created_at).getTime();
-      if (tradeTime <= lastSync) continue;
-
-      const txHash = trade.transactionHash ?? trade.tx_hash;
+      const parsed = this.parseTrade(trade);
+      if (parsed.tradeTime <= lastSync) continue;
 
       // Check if already synced by the 60s loop
       const existing = await this.prisma.leaderEvent.findFirst({
         where: {
           leaderId: leader.id,
-          transactionHash: txHash,
+          transactionHash: parsed.transactionHash,
         },
       });
 
@@ -122,13 +120,7 @@ export class CopyTradingWorker {
 
       await this.engine.processLeaderEvent({
         leaderId: leader.id,
-        conditionId: trade.conditionId ?? trade.condition_id,
-        tokenId: trade.tokenId ?? trade.asset_id,
-        marketSlug: trade.marketSlug ?? trade.market_slug,
-        side: trade.side === 'BUY' || trade.side === 0 ? 'BUY' : 'SELL',
-        size: parseFloat(trade.size ?? trade.amount ?? '0'),
-        price: parseFloat(trade.price ?? '0'),
-        transactionHash: txHash,
+        ...parsed.fields,
       });
     }
 
@@ -224,15 +216,13 @@ export class CopyTradingWorker {
     let newCount = 0;
 
     for (const trade of trades) {
-      const tradeTime = new Date(trade.timestamp ?? trade.created_at).getTime();
-      if (tradeTime <= lastSync) continue;
-
-      const txHash = trade.transactionHash ?? trade.tx_hash;
+      const parsed = this.parseTrade(trade);
+      if (parsed.tradeTime <= lastSync) continue;
 
       // Deduplicate by transactionHash
-      if (txHash) {
+      if (parsed.transactionHash) {
         const existing = await this.prisma.leaderEvent.findFirst({
-          where: { leaderId: leader.id, transactionHash: txHash },
+          where: { leaderId: leader.id, transactionHash: parsed.transactionHash },
         });
         if (existing) continue;
       }
@@ -240,13 +230,7 @@ export class CopyTradingWorker {
       await this.prisma.leaderEvent.create({
         data: {
           leaderId: leader.id,
-          conditionId: trade.conditionId ?? trade.condition_id,
-          tokenId: trade.tokenId ?? trade.asset_id,
-          marketSlug: trade.marketSlug ?? trade.market_slug,
-          side: trade.side === 'BUY' || trade.side === 0 ? 'BUY' : 'SELL',
-          size: parseFloat(trade.size ?? trade.amount ?? '0'),
-          price: parseFloat(trade.price ?? '0'),
-          transactionHash: txHash,
+          ...parsed.fields,
         },
       });
       newCount++;
@@ -259,6 +243,45 @@ export class CopyTradingWorker {
     });
 
     return newCount;
+  }
+
+  /**
+   * Normalize a Polymarket data API trade object into our internal format.
+   * The API returns: asset (token ID), slug (market slug), timestamp (unix seconds),
+   * conditionId, transactionHash, side, size, price.
+   */
+  private parseTrade(trade: any): {
+    tradeTime: number;
+    transactionHash: string | undefined;
+    fields: {
+      conditionId: string;
+      tokenId: string;
+      marketSlug: string | undefined;
+      side: 'BUY' | 'SELL';
+      size: number;
+      price: number;
+      transactionHash: string | undefined;
+    };
+  } {
+    // timestamp is unix seconds from the Polymarket data API
+    const ts = trade.timestamp;
+    const tradeTime = typeof ts === 'number' && ts > 1e12 ? ts : (typeof ts === 'number' ? ts * 1000 : new Date(ts).getTime());
+
+    const transactionHash = trade.transactionHash ?? trade.tx_hash;
+
+    return {
+      tradeTime,
+      transactionHash,
+      fields: {
+        conditionId: trade.conditionId ?? trade.condition_id,
+        tokenId: trade.asset ?? trade.tokenId ?? trade.asset_id,
+        marketSlug: trade.slug ?? trade.marketSlug ?? trade.market_slug,
+        side: trade.side === 'BUY' || trade.side === 0 ? 'BUY' : 'SELL',
+        size: parseFloat(trade.size ?? trade.amount ?? '0'),
+        price: parseFloat(trade.price ?? '0'),
+        transactionHash,
+      },
+    };
   }
 
   private async fetchPolymarketTrades(address: string): Promise<any[] | null> {
