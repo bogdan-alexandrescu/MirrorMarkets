@@ -1,10 +1,8 @@
 /**
- * TradingAuthorityProvider — Phase 2A abstraction for signing operations.
+ * TradingAuthorityProvider — abstraction for signing operations.
  *
- * All code that previously used raw private keys (TradingKeyProvider) must
- * go through this interface instead.  The production implementation delegates
- * to Dynamic Server Wallets (MPC-backed).  A mock implementation exists for
- * local development and testing.
+ * The production implementation delegates to Dynamic Server Wallets
+ * (MPC-backed).  A mock implementation exists for local dev and testing.
  */
 
 export interface EIP712TypedData {
