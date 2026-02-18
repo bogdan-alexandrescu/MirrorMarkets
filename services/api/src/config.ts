@@ -18,19 +18,12 @@ const configSchema = z.object({
   DYNAMIC_ENVIRONMENT_ID: z.string().default(''),
   DYNAMIC_PUBLIC_KEY: z.string().default(''),
 
-  // Dynamic Server Wallets (deprecated — replaced by Crossmint)
+  // Dynamic Server Wallets (preferred — produces valid EIP-712 signatures)
   DYNAMIC_API_KEY: z.string().default(''),
   DYNAMIC_SERVER_WALLET_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
 
-  // Crossmint Server Wallets (replaces Dynamic for multi-user MPC wallets)
-  CROSSMINT_API_KEY: z.string().default(''),
-  CROSSMINT_BASE_URL: z.string().default('https://www.crossmint.com/api'),
-
-  // Trading key encryption (Phase 1 — kept for migration, will be removed post-migration)
+  // Session key encryption (used by Safe automation / session keys)
   TRADING_KEY_ENCRYPTION_KEY: z.string().default('0'.repeat(64)),
-
-  // Phase 2A feature flag: when true, new users get Dynamic Server Wallets
-  USE_SERVER_WALLETS: z.coerce.boolean().default(true),
 
   // Polygon RPC
   POLYGON_RPC_URL: z.string().default('https://polygon-rpc.com'),

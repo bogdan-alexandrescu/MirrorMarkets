@@ -1,11 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import type { TradingAuthorityProvider, ProvisioningStatus } from '@mirrormarkets/shared';
 import { AuditService } from './audit.service.js';
-import { getConfig } from '../config.js';
 import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
 
 /**
- * ProvisioningService — Phase 2A
+ * ProvisioningService
  *
  * Provisions a new user's wallet infrastructure:
  *   1. Store the Dynamic embedded-wallet EOA address (identity).
@@ -15,9 +14,6 @@ import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
  *   5. Create a default copy profile.
  *
  * Idempotent: each step is guarded by a check-before-write pattern.
- *
- * Phase 1 TRADING_EOA wallets are still readable for migration purposes
- * but are never created for new users when USE_SERVER_WALLETS=true.
  */
 export class ProvisioningService {
   constructor(
@@ -58,8 +54,6 @@ export class ProvisioningService {
   }
 
   async provision(userId: string, dynamicEoaAddress?: string, ipAddress?: string): Promise<ProvisioningStatus> {
-    const config = getConfig();
-
     // Step 1: Store Dynamic EOA (identity wallet) — skip if email-only auth
     if (dynamicEoaAddress) {
       await this.prisma.wallet.upsert({
@@ -69,32 +63,15 @@ export class ProvisioningService {
       });
     }
 
-    // Step 2: Create trading authority
-    let tradingAddress: string;
+    // Step 2: Create Dynamic Server Wallet
+    const tradingAddress = await this.tradingAuthority.getAddress(userId);
 
-    if (config.USE_SERVER_WALLETS) {
-      // Phase 2A: Dynamic Server Wallet
-      tradingAddress = await this.tradingAuthority.getAddress(userId);
-
-      await this.audit.log({
-        userId,
-        action: 'WALLET_PROVISIONED',
-        details: { type: 'SERVER_WALLET', address: tradingAddress },
-        ipAddress,
-      });
-    } else {
-      // Phase 1 legacy path: still supported during migration window
-      const existingTrading = await this.prisma.wallet.findUnique({
-        where: { userId_type: { userId, type: 'TRADING_EOA' } },
-      });
-
-      if (existingTrading) {
-        tradingAddress = existingTrading.address;
-      } else {
-        // This path is disabled when USE_SERVER_WALLETS=true (default)
-        throw new Error('Legacy key provisioning is disabled.  Set USE_SERVER_WALLETS=true.');
-      }
-    }
+    await this.audit.log({
+      userId,
+      action: 'WALLET_PROVISIONED',
+      details: { type: 'SERVER_WALLET', address: tradingAddress },
+      ipAddress,
+    });
 
     // Step 3: Derive CLOB API credentials
     const existingCreds = await this.prisma.polymarketCredentials.findUnique({

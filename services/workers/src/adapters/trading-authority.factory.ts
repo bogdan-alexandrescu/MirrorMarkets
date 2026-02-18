@@ -9,9 +9,8 @@ export function getTradingAuthorityProvider(prisma: PrismaClient): TradingAuthor
   if (_provider) return _provider;
 
   const apiKey = process.env.DYNAMIC_API_KEY ?? '';
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
 
-  if (apiKey && nodeEnv === 'production') {
+  if (apiKey) {
     _provider = new DynamicServerWalletProvider(prisma);
   } else {
     _provider = new MockDynamicServerWalletProvider(prisma);

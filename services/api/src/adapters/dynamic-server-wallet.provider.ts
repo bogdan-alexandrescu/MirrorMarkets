@@ -10,7 +10,7 @@ import type {
   SigningProvider,
 } from '@mirrormarkets/shared';
 import { AppError, ErrorCodes, SIGNING_CONFIG } from '@mirrormarkets/shared';
-import { CrossmintApiError } from './crossmint-api.adapter.js';
+import { DynamicApiError } from './dynamic-api.adapter.js';
 import { SigningRequestService } from '../services/signing-request.service.js';
 import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
 import { SigningCircuitBreaker } from '../services/signing-circuit-breaker.js';
@@ -139,7 +139,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
 
     try {
       const result = await this.retryWithBackoff(
-        () => this.adapter.sendTransaction(sw.dynamicServerWalletId, tx),
+        () => this.adapter.sendTransaction(sw.address, tx),
       );
 
       await this.signingService.markSucceeded(requestId, result.hash);
@@ -199,7 +199,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     requestType: 'TYPED_DATA' | 'MESSAGE';
     purpose: SigningPurpose;
     payload: unknown;
-    execute: (walletId: string) => Promise<string>;
+    execute: (walletAddress: string) => Promise<string>;
   }): Promise<string> {
     const { userId, requestType, purpose, payload, execute } = params;
 
@@ -234,7 +234,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     await this.signingService.markSent(requestId);
 
     try {
-      const signature = await this.retryWithBackoff(() => execute(sw.dynamicServerWalletId));
+      const signature = await this.retryWithBackoff(() => execute(sw.address));
 
       await this.signingService.markSucceeded(requestId, signature);
       await this.circuitBreaker.recordSuccess();
@@ -370,7 +370,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
         if (attempt >= SIGNING_CONFIG.MAX_RETRY_ATTEMPTS) throw error;
 
         if (
-          error instanceof CrossmintApiError &&
+          error instanceof DynamicApiError &&
           error.errorType === 'RATE_LIMITED'
         ) {
           const delay = (error.retryAfterSeconds ?? 2) * 1000;
