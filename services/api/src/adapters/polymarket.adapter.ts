@@ -82,12 +82,12 @@ export class PolymarketAdapter {
       signer as any,
     );
 
-    const creds = await client.createApiKey();
+    const creds = await client.deriveApiKey();
     return { key: creds.key, secret: creds.secret, passphrase: creds.passphrase };
   }
 
   async deriveApiKey(): Promise<PolymarketApiCredentials> {
-    const creds = await this.client.createApiKey();
+    const creds = await this.client.deriveApiKey();
     return {
       key: creds.key,
       secret: creds.secret,

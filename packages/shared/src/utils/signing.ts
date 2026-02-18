@@ -2,10 +2,18 @@ import { createHash, randomBytes } from 'crypto';
 
 /**
  * Compute a SHA-256 hash of the signing payload for deduplication / audit.
- * Works on any JSON-serializable object.
+ * Uses deterministic (sorted-key) JSON serialization at all nesting levels.
  */
 export function hashSigningPayload(payload: unknown): string {
-  const canonical = JSON.stringify(payload, Object.keys(payload as Record<string, unknown>).sort());
+  const canonical = JSON.stringify(payload, (_key, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.keys(value).sort().reduce<Record<string, unknown>>((sorted, k) => {
+        sorted[k] = value[k];
+        return sorted;
+      }, {});
+    }
+    return value;
+  });
   return createHash('sha256').update(canonical).digest('hex');
 }
 

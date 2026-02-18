@@ -18,11 +18,11 @@ const configSchema = z.object({
   DYNAMIC_ENVIRONMENT_ID: z.string().default(''),
   DYNAMIC_PUBLIC_KEY: z.string().default(''),
 
-  // Dynamic Server Wallets (deprecated — replaced by Crossmint)
+  // Dynamic Server Wallets (preferred — produces valid EIP-712 signatures)
   DYNAMIC_API_KEY: z.string().default(''),
   DYNAMIC_SERVER_WALLET_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
 
-  // Crossmint Server Wallets (replaces Dynamic for multi-user MPC wallets)
+  // Crossmint Server Wallets (fallback — kept during migration)
   CROSSMINT_API_KEY: z.string().default(''),
   CROSSMINT_BASE_URL: z.string().default('https://www.crossmint.com/api'),
 

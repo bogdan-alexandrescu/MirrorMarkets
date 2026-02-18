@@ -3,6 +3,7 @@ import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { getConfig } from '../config.js';
 import { DynamicServerWalletProvider } from './dynamic-server-wallet.provider.js';
 import { MockDynamicServerWalletProvider } from './mock-server-wallet.provider.js';
+import { DynamicApiAdapter } from './dynamic-api.adapter.js';
 import { CrossmintApiAdapter } from './crossmint-api.adapter.js';
 import { SigningRequestService } from '../services/signing-request.service.js';
 import { SigningRateLimiter } from '../services/signing-rate-limiter.js';
@@ -17,8 +18,9 @@ let _signingRateLimiter: SigningRateLimiter | null = null;
  * Returns a singleton TradingAuthorityProvider based on configuration.
  *
  * Priority:
- *   1. CROSSMINT_API_KEY set → Crossmint MPC wallets (preferred)
- *   2. Otherwise → MockDynamicServerWalletProvider (dev/test)
+ *   1. DYNAMIC_API_KEY set → Dynamic.xyz MPC wallets (preferred)
+ *   2. CROSSMINT_API_KEY set → Crossmint MPC wallets (fallback)
+ *   3. Otherwise → MockDynamicServerWalletProvider (dev/test)
  *
  * The factory is idempotent — calling it multiple times with the same
  * PrismaClient returns the same instance.
@@ -29,7 +31,21 @@ export function getTradingAuthorityProvider(prisma: PrismaClient): TradingAuthor
   const config = getConfig();
   const auditService = new AuditService(prisma);
 
-  if (config.CROSSMINT_API_KEY) {
+  if (config.DYNAMIC_API_KEY) {
+    const adapter = new DynamicApiAdapter();
+    const signingService = new SigningRequestService(prisma);
+    _signingRateLimiter = new SigningRateLimiter(auditService);
+    _signingCircuitBreaker = new SigningCircuitBreaker(auditService);
+
+    _provider = new DynamicServerWalletProvider(prisma, {
+      adapter,
+      providerName: 'DYNAMIC_SERVER_WALLET',
+      signingService,
+      rateLimiter: _signingRateLimiter,
+      circuitBreaker: _signingCircuitBreaker,
+      auditService,
+    });
+  } else if (config.CROSSMINT_API_KEY) {
     const adapter = new CrossmintApiAdapter(config.CROSSMINT_API_KEY, config.CROSSMINT_BASE_URL);
     const signingService = new SigningRequestService(prisma);
     _signingRateLimiter = new SigningRateLimiter(auditService);
