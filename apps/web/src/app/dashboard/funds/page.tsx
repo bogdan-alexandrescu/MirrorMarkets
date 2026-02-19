@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useBalances, useDepositAddress, useWithdrawals } from '@/hooks/useApi';
+import { useBalances, useDepositAddress, useWithdrawals, useApprovalStatus, useApproveExchange } from '@/hooks/useApi';
 import { DepositCard } from '@/components/DepositCard';
 import { WithdrawForm } from '@/components/WithdrawForm';
 import { formatUsd } from '@mirrormarkets/shared';
@@ -9,6 +9,8 @@ import { formatUsd } from '@mirrormarkets/shared';
 export default function FundsPage() {
   const { data: balances } = useBalances();
   const { data: deposit } = useDepositAddress();
+  const { data: approvalStatus } = useApprovalStatus();
+  const approveExchange = useApproveExchange();
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const { data: withdrawals } = useWithdrawals(withdrawalPage);
 
@@ -30,6 +32,37 @@ export default function FundsPage() {
           <p className="text-sm text-[--text-secondary]">Total Value</p>
           <p className="text-lg font-semibold text-[--text-primary]">{balances ? formatUsd(balances.total) : '--'}</p>
         </div>
+      </div>
+
+      {/* Exchange Approval */}
+      <div className="card p-4">
+        {approvalStatus?.approved ? (
+          <div className="flex items-center gap-2">
+            <span className="badge-success">Approved</span>
+            <span className="text-sm text-[--text-secondary]">Exchange trading enabled</span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-[--text-primary]">Enable Trading</p>
+              <p className="text-sm text-[--text-secondary]">
+                Approve the exchange to settle trades. Gasless — no MATIC needed.
+              </p>
+            </div>
+            <button
+              onClick={() => approveExchange.mutate()}
+              disabled={approveExchange.isPending}
+              className="btn-primary"
+            >
+              {approveExchange.isPending ? 'Approving...' : 'Approve Exchange'}
+            </button>
+          </div>
+        )}
+        {approveExchange.isError && (
+          <p className="mt-2 text-sm text-[--danger]">
+            {approveExchange.error instanceof Error ? approveExchange.error.message : 'Approval failed'}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

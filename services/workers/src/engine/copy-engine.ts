@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import type Redis from 'ioredis';
 import type { Logger } from 'pino';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { AppError, ErrorCodes } from '@mirrormarkets/shared';
@@ -20,6 +21,7 @@ export class CopyEngine {
 
   constructor(
     private prisma: PrismaClient,
+    private redis: Redis,
     private logger: Logger,
     private tradingAuthority: TradingAuthorityProvider,
   ) {}
@@ -130,6 +132,10 @@ export class CopyEngine {
         where: { userId: user.id, status: 'OPEN' },
       });
 
+      // Read cached USDC balance from Redis (set by position-sync worker)
+      const cachedBalance = await this.redis.get(`user:${user.id}:usdc_balance`);
+      const currentBalance = cachedBalance ? parseFloat(cachedBalance) : 0;
+
       // Evaluate guardrails
       const result = evaluateGuardrails({
         profile,
@@ -137,7 +143,7 @@ export class CopyEngine {
         leaderSide: leaderEvent.side,
         leaderPrice: leaderEvent.price,
         leaderSize: leaderEvent.size,
-        currentBalance: 0, // TODO: fetch real balance from position sync
+        currentBalance,
       });
 
       if (!result.allowed) {

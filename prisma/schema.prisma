@@ -190,6 +190,7 @@ enum AuditAction {
   WITHDRAWAL_ALLOWLIST_ADDED
   WITHDRAWAL_ALLOWLIST_REMOVED
   CLOB_CREDENTIALS_DERIVED
+  EXCHANGE_APPROVED
 }
 
 // ─── Models ─────────────────────────────────────────

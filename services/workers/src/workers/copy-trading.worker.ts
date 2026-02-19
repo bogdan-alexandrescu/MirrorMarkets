@@ -17,7 +17,7 @@ export class CopyTradingWorker {
     private logger: Logger,
     tradingAuthority: TradingAuthorityProvider,
   ) {
-    this.engine = new CopyEngine(prisma, logger, tradingAuthority);
+    this.engine = new CopyEngine(prisma, redis, logger, tradingAuthority);
   }
 
   start(): void {
