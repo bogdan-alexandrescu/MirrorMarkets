@@ -217,6 +217,25 @@ export function useCreateWithdrawal() {
   });
 }
 
+export function useApprovalStatus() {
+  return useQuery({
+    queryKey: ['approval-status'],
+    queryFn: () => api.get<{ approved: boolean }>('/funds/approval-status'),
+    enabled: !!api.getToken(),
+  });
+}
+
+export function useApproveExchange() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ approved: boolean; txHashes: string[] }>('/funds/approve-exchange'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['approval-status'] });
+      qc.invalidateQueries({ queryKey: ['balances'] });
+    },
+  });
+}
+
 export function useWithdrawals(page = 1) {
   return useQuery({
     queryKey: ['withdrawals', page],

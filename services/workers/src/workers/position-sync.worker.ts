@@ -1,7 +1,14 @@
 import { PrismaClient } from '@prisma/client';
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
-import { WORKER_INTERVALS } from '@mirrormarkets/shared';
+import { WORKER_INTERVALS, POLYMARKET_CONTRACTS } from '@mirrormarkets/shared';
+
+// Native USDC on Polygon (Circle-issued)
+const NATIVE_USDC = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+// ERC-20 balanceOf(address) selector
+const BALANCE_OF_SELECTOR = '0x70a08231';
+// Redis TTL for cached USDC balance (10 minutes)
+const USDC_BALANCE_TTL = 600;
 
 export class PositionSyncWorker {
   private interval: ReturnType<typeof setInterval> | null = null;
@@ -83,5 +90,46 @@ export class PositionSyncWorker {
         },
       });
     }
+
+    // Cache on-chain USDC balance in Redis for copy engine
+    try {
+      const balance = await this.getOnChainUsdcBalance(proxyAddress);
+      await this.redis.set(`user:${userId}:usdc_balance`, balance.toString(), 'EX', USDC_BALANCE_TTL);
+    } catch (error) {
+      this.logger.warn({ userId, err: error }, 'Failed to cache USDC balance');
+    }
+  }
+
+  private async getOnChainUsdcBalance(walletAddress: string): Promise<number> {
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+    const paddedAddr = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+    const callData = `${BALANCE_OF_SELECTOR}${paddedAddr}`;
+
+    const callContract = async (contractAddr: string): Promise<bigint> => {
+      try {
+        const res = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_call',
+            params: [{ to: contractAddr, data: callData }, 'latest'],
+            id: 1,
+          }),
+        });
+        const data = (await res.json()) as { result?: string };
+        return data.result ? BigInt(data.result) : 0n;
+      } catch {
+        return 0n;
+      }
+    };
+
+    const [usdcE, native] = await Promise.all([
+      callContract(POLYMARKET_CONTRACTS.USDC),
+      callContract(NATIVE_USDC),
+    ]);
+
+    // Both have 6 decimals
+    return Number(usdcE + native) / 1e6;
   }
 }

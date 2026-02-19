@@ -74,6 +74,41 @@ export const fundRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // GET /funds/approval-status
+  app.get('/approval-status', {
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    const creds = await app.prisma.polymarketCredentials.findUnique({
+      where: { userId: request.userId },
+    });
+
+    return reply.send({ approved: creds?.isProxyDeployed ?? false });
+  });
+
+  // POST /funds/approve-exchange
+  app.post('/approve-exchange', {
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    const relayer = await walletService.getRelayerAdapter(request.userId);
+
+    const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
+
+    // Mark proxy as deployed (exchange approved)
+    await app.prisma.polymarketCredentials.update({
+      where: { userId: request.userId },
+      data: { isProxyDeployed: true },
+    });
+
+    await audit.log({
+      userId: request.userId,
+      action: 'EXCHANGE_APPROVED',
+      details: { ctfTxHash, negRiskTxHash },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ approved: true, txHashes: [ctfTxHash, negRiskTxHash] });
+  });
+
   // GET /funds/withdrawals
   app.get('/withdrawals', {
     preHandler: [app.authenticate],

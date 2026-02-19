@@ -20,6 +20,52 @@ export class RelayerAdapter {
     private proxyAddress: string,
   ) {}
 
+  /**
+   * Approve both CTF Exchange and NegRisk CTF Exchange to spend USDC.
+   * Uses max uint256 so approval is one-time.
+   */
+  async approveExchange(): Promise<{ ctfTxHash: string; negRiskTxHash: string }> {
+    const MAX_UINT256 = (1n << 256n) - 1n;
+
+    const ctfTxHash = await this.submitApproval(POLYMARKET_CONTRACTS.CTF_EXCHANGE, MAX_UINT256);
+    const negRiskTxHash = await this.submitApproval(POLYMARKET_CONTRACTS.NEG_RISK_CTF_EXCHANGE, MAX_UINT256);
+
+    return { ctfTxHash, negRiskTxHash };
+  }
+
+  private async submitApproval(spender: string, amount: bigint): Promise<string> {
+    const payload = {
+      type: 'PROXY',
+      from: this.tradingAddress,
+      proxy: this.proxyAddress,
+      transactions: [
+        {
+          to: POLYMARKET_CONTRACTS.USDC,
+          data: this.encodeApprove(spender, amount),
+        },
+      ],
+    };
+
+    const messageHash = getBytes(
+      keccak256(toUtf8Bytes(JSON.stringify(payload))),
+    );
+    const signature = await this.tradingAuthority.signMessage(this.userId, messageHash);
+
+    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/relay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, signature }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Relayer approval failed for ${spender}: ${res.status} ${body}`);
+    }
+
+    const result = (await res.json()) as { transactionHash: string };
+    return result.transactionHash;
+  }
+
   async approveAndDeposit(amountUsdcRaw: bigint): Promise<string> {
     const payload = {
       type: 'PROXY',
