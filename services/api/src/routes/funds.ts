@@ -91,23 +91,30 @@ export const fundRoutes: FastifyPluginAsync = async (app) => {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
     try {
-      const relayer = await walletService.getRelayerAdapter(request.userId);
-
-      const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
-
-      // Mark proxy as deployed and fix POLY_PROXY address to CREATE2-derived proxy
+      // Ensure POLY_PROXY address is the correct CREATE2-derived address
       const tradingAddress = await tradingAuthority.getAddress(request.userId);
       const proxyAddress = deriveProxyWallet(tradingAddress);
-
-      await app.prisma.polymarketCredentials.update({
-        where: { userId: request.userId },
-        data: { isProxyDeployed: true },
-      });
 
       await app.prisma.wallet.upsert({
         where: { userId_type: { userId: request.userId, type: 'POLY_PROXY' } },
         create: { userId: request.userId, type: 'POLY_PROXY', address: proxyAddress },
         update: { address: proxyAddress },
+      });
+
+      // If already approved, return early
+      const creds = await app.prisma.polymarketCredentials.findUnique({
+        where: { userId: request.userId },
+      });
+      if (creds?.isProxyDeployed) {
+        return reply.send({ approved: true, txHashes: [] });
+      }
+
+      const relayer = await walletService.getRelayerAdapter(request.userId);
+      const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
+
+      await app.prisma.polymarketCredentials.update({
+        where: { userId: request.userId },
+        data: { isProxyDeployed: true },
       });
 
       await audit.log({
