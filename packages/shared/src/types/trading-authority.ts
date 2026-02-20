@@ -119,7 +119,7 @@ export interface SigningRateLimitConfig {
  */
 export interface DynamicServerWalletAdapter {
   createWallet(userId: string): Promise<{ walletId: string; address: string }>;
-  signMessage(walletId: string, message: string): Promise<string>;
+  signMessage(walletId: string, message: string | Uint8Array): Promise<string>;
   signTypedData(walletId: string, typedData: EIP712TypedData): Promise<string>;
   sendTransaction(walletId: string, tx: TransactionRequest): Promise<TransactionResult>;
   getWallet(walletId: string): Promise<{ walletId: string; address: string; status: string }>;

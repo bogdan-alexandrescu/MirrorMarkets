@@ -98,7 +98,7 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
     return { walletId: wallet.walletId, address: wallet.accountAddress };
   }
 
-  async signMessage(walletAddress: string, message: string): Promise<string> {
+  async signMessage(walletAddress: string, message: string | Uint8Array): Promise<string> {
     const client = await this.getClient();
     const config = getConfig();
     const walletClient = await client.getWalletClient({
@@ -106,6 +106,10 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
       chainId: 137,
       rpcUrl: config.POLYGON_RPC_URL,
     });
+    // Raw bytes must use { raw: ... } so viem doesn't UTF-8 encode them
+    if (message instanceof Uint8Array) {
+      return walletClient.signMessage({ message: { raw: message } });
+    }
     return walletClient.signMessage({ message });
   }
 
