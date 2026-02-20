@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DynamicEvmWalletClient } from '@dynamic-labs-wallet/node-evm';
 import { ThresholdSignatureScheme } from '@dynamic-labs-wallet/node';
+import { hashMessage } from 'ethers';
 import { polygon } from 'viem/chains';
 import type {
   TradingAuthorityProvider,
@@ -88,16 +89,31 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const client = await this.getClient();
     const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
 
+    if (message instanceof Uint8Array) {
+      // Dynamic SDK doesn't support viem's { raw: ... } message format.
+      // Compute the EIP-191 hash ourselves, then use the low-level sign()
+      // method with isFormatted: true so the SDK signs the hash directly.
+      const eip191Hash = hashMessage(message);
+
+      const signatureEcdsa = await (client as any).sign({
+        message: eip191Hash,
+        accountAddress: sw.address,
+        chainName: 'EVM',
+        isFormatted: true,
+      });
+
+      const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
+      const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
+      const v = Number(signatureEcdsa.v);
+      const vNormalized = v < 27 ? v + 27 : v;
+      return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
+    }
+
     const walletClient = await client.getWalletClient({
       accountAddress: sw.address,
       chainId: 137,
       rpcUrl,
     });
-
-    if (message instanceof Uint8Array) {
-      const hex = `0x${Buffer.from(message).toString('hex')}` as `0x${string}`;
-      return walletClient.signMessage({ message: { raw: hex } });
-    }
     return walletClient.signMessage({ message });
   }
 

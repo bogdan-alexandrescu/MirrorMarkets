@@ -1,5 +1,6 @@
 import { DynamicEvmWalletClient } from '@dynamic-labs-wallet/node-evm';
 import { ThresholdSignatureScheme } from '@dynamic-labs-wallet/node';
+import { hashMessage } from 'ethers';
 import { polygon } from 'viem/chains';
 import type {
   DynamicServerWalletAdapter,
@@ -101,18 +102,34 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
   async signMessage(walletAddress: string, message: string | Uint8Array): Promise<string> {
     const client = await this.getClient();
     const config = getConfig();
+
+    if (message instanceof Uint8Array) {
+      // The Dynamic SDK's walletClient.signMessage doesn't support viem's
+      // { raw: Uint8Array | Hex } format (API returns 400). Bypass it by
+      // computing the EIP-191 hash ourselves, then use the low-level sign()
+      // method with isFormatted: true so the SDK signs the hash directly.
+      const eip191Hash = hashMessage(message);
+
+      const signatureEcdsa = await (client as any).sign({
+        message: eip191Hash,
+        accountAddress: walletAddress,
+        chainName: 'EVM',
+        isFormatted: true,
+      });
+
+      // Serialize ECDSA signature (r + s + v)
+      const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
+      const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
+      const v = Number(signatureEcdsa.v);
+      const vNormalized = v < 27 ? v + 27 : v;
+      return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
+    }
+
     const walletClient = await client.getWalletClient({
       accountAddress: walletAddress,
       chainId: 137,
       rpcUrl: config.POLYGON_RPC_URL,
     });
-    // Raw bytes must use { raw: hex } so viem decodes hex to bytes
-    // instead of treating the message as UTF-8 text.
-    // Dynamic SDK may not support Uint8Array in raw, so use hex string.
-    if (message instanceof Uint8Array) {
-      const hex = `0x${Buffer.from(message).toString('hex')}` as `0x${string}`;
-      return walletClient.signMessage({ message: { raw: hex } });
-    }
     return walletClient.signMessage({ message });
   }
 
