@@ -95,7 +95,8 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     });
 
     if (message instanceof Uint8Array) {
-      return walletClient.signMessage({ message: { raw: message } });
+      const hex = `0x${Buffer.from(message).toString('hex')}` as `0x${string}`;
+      return walletClient.signMessage({ message: { raw: hex } });
     }
     return walletClient.signMessage({ message });
   }
