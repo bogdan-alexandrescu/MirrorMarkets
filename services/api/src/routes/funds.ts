@@ -89,24 +89,30 @@ export const fundRoutes: FastifyPluginAsync = async (app) => {
   app.post('/approve-exchange', {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
-    const relayer = await walletService.getRelayerAdapter(request.userId);
+    try {
+      const relayer = await walletService.getRelayerAdapter(request.userId);
 
-    const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
+      const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
 
-    // Mark proxy as deployed (exchange approved)
-    await app.prisma.polymarketCredentials.update({
-      where: { userId: request.userId },
-      data: { isProxyDeployed: true },
-    });
+      // Mark proxy as deployed (exchange approved)
+      await app.prisma.polymarketCredentials.update({
+        where: { userId: request.userId },
+        data: { isProxyDeployed: true },
+      });
 
-    await audit.log({
-      userId: request.userId,
-      action: 'EXCHANGE_APPROVED',
-      details: { ctfTxHash, negRiskTxHash },
-      ipAddress: request.ip,
-    });
+      await audit.log({
+        userId: request.userId,
+        action: 'EXCHANGE_APPROVED',
+        details: { ctfTxHash, negRiskTxHash },
+        ipAddress: request.ip,
+      });
 
-    return reply.send({ approved: true, txHashes: [ctfTxHash, negRiskTxHash] });
+      return reply.send({ approved: true, txHashes: [ctfTxHash, negRiskTxHash] });
+    } catch (error) {
+      request.log.error(error, 'approve-exchange failed');
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.status(500).send({ code: 'APPROVE_FAILED', message });
+    }
   });
 
   // GET /funds/withdrawals
