@@ -1,16 +1,24 @@
-import { Interface, getBytes, keccak256, toUtf8Bytes } from 'ethers';
+import { Interface, AbiCoder, solidityPackedKeccak256, concat, hexlify, getBytes, zeroPadValue, toBeHex } from 'ethers';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
-import { POLYMARKET_CONTRACTS, POLYMARKET_URLS } from '@mirrormarkets/shared';
+import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
+
+const DEFAULT_GAS_LIMIT = '10000000';
+
+// ProxyWalletFactory.proxy(calls) ABI for encoding batched proxy calls
+const PROXY_ABI = [
+  'function proxy((uint8 typeCode, address to, uint256 value, bytes data)[] calls) payable returns (bytes[])',
+];
 
 /**
- * RelayerAdapter — Phase 2A
+ * RelayerAdapter — v2
  *
- * Submits gasless transactions via the Polymarket relayer.
- * All signing is done through the TradingAuthorityProvider — no raw keys.
- *
- * [DVC-7] Verify that the relayer accepts signatures from a non-local
- * signer (i.e., the signed message can be produced by signMessage on
- * the Dynamic server wallet and still be accepted).
+ * Submits gasless transactions via the Polymarket relayer v2.
+ * Uses the proxy transaction flow:
+ *   1. GET /relay-payload for nonce + relay address
+ *   2. Encode transactions via ProxyWalletFactory.proxy(calls)
+ *   3. Create struct hash with "rlx:" prefix
+ *   4. Sign the struct hash
+ *   5. POST /submit
  */
 export class RelayerAdapter {
   constructor(
@@ -27,109 +35,37 @@ export class RelayerAdapter {
   async approveExchange(): Promise<{ ctfTxHash: string; negRiskTxHash: string }> {
     const MAX_UINT256 = (1n << 256n) - 1n;
 
-    const ctfTxHash = await this.submitApproval(POLYMARKET_CONTRACTS.CTF_EXCHANGE, MAX_UINT256);
-    const negRiskTxHash = await this.submitApproval(POLYMARKET_CONTRACTS.NEG_RISK_CTF_EXCHANGE, MAX_UINT256);
+    // Batch both approvals in a single relayer transaction
+    const txHash = await this.submitProxyTransactions([
+      {
+        to: POLYMARKET_CONTRACTS.USDC,
+        data: this.encodeApprove(POLYMARKET_CONTRACTS.CTF_EXCHANGE, MAX_UINT256),
+      },
+      {
+        to: POLYMARKET_CONTRACTS.USDC,
+        data: this.encodeApprove(POLYMARKET_CONTRACTS.NEG_RISK_CTF_EXCHANGE, MAX_UINT256),
+      },
+    ]);
 
-    return { ctfTxHash, negRiskTxHash };
-  }
-
-  private async submitApproval(spender: string, amount: bigint): Promise<string> {
-    const payload = {
-      type: 'PROXY',
-      from: this.tradingAddress,
-      proxy: this.proxyAddress,
-      transactions: [
-        {
-          to: POLYMARKET_CONTRACTS.USDC,
-          data: this.encodeApprove(spender, amount),
-        },
-      ],
-    };
-
-    const messageHash = getBytes(
-      keccak256(toUtf8Bytes(JSON.stringify(payload))),
-    );
-    const signature = await this.tradingAuthority.signMessage(this.userId, messageHash);
-
-    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/relay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, signature }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Relayer approval failed for ${spender}: ${res.status} ${body}`);
-    }
-
-    const result = (await res.json()) as { transactionHash: string };
-    return result.transactionHash;
+    return { ctfTxHash: txHash, negRiskTxHash: txHash };
   }
 
   async approveAndDeposit(amountUsdcRaw: bigint): Promise<string> {
-    const payload = {
-      type: 'PROXY',
-      from: this.tradingAddress,
-      proxy: this.proxyAddress,
-      transactions: [
-        {
-          to: POLYMARKET_CONTRACTS.USDC,
-          data: this.encodeApprove(POLYMARKET_CONTRACTS.CTF_EXCHANGE, amountUsdcRaw),
-        },
-      ],
-    };
-
-    const messageHash = getBytes(
-      keccak256(toUtf8Bytes(JSON.stringify(payload))),
-    );
-    const signature = await this.tradingAuthority.signMessage(this.userId, messageHash);
-
-    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/relay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, signature }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Relayer deposit failed: ${res.status} ${body}`);
-    }
-
-    const result = (await res.json()) as { transactionHash: string };
-    return result.transactionHash;
+    return this.submitProxyTransactions([
+      {
+        to: POLYMARKET_CONTRACTS.USDC,
+        data: this.encodeApprove(POLYMARKET_CONTRACTS.CTF_EXCHANGE, amountUsdcRaw),
+      },
+    ]);
   }
 
   async withdraw(amountUsdcRaw: bigint, destination: string): Promise<string> {
-    const payload = {
-      type: 'PROXY',
-      from: this.tradingAddress,
-      proxy: this.proxyAddress,
-      transactions: [
-        {
-          to: POLYMARKET_CONTRACTS.USDC,
-          data: this.encodeTransfer(destination, amountUsdcRaw),
-        },
-      ],
-    };
-
-    const messageHash = getBytes(
-      keccak256(toUtf8Bytes(JSON.stringify(payload))),
-    );
-    const signature = await this.tradingAuthority.signMessage(this.userId, messageHash);
-
-    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/relay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, signature }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Relayer withdrawal failed: ${res.status} ${body}`);
-    }
-
-    const result = (await res.json()) as { transactionHash: string };
-    return result.transactionHash;
+    return this.submitProxyTransactions([
+      {
+        to: POLYMARKET_CONTRACTS.USDC,
+        data: this.encodeTransfer(destination, amountUsdcRaw),
+      },
+    ]);
   }
 
   async redeemPositions(conditionId: string): Promise<string> {
@@ -142,36 +78,177 @@ export class RelayerAdapter {
       [1, 2],
     ]);
 
-    const payload = {
+    return this.submitProxyTransactions([
+      { to: POLYMARKET_CONTRACTS.CONDITIONAL_TOKENS, data },
+    ]);
+  }
+
+  // ─── Core relay v2 flow ──────────────────────────────────
+
+  private async submitProxyTransactions(
+    calls: Array<{ to: string; data: string }>,
+  ): Promise<string> {
+    const from = this.tradingAddress;
+    const proxyFactory = POLYMARKET_RELAY_CONTRACTS.PROXY_FACTORY;
+    const relayHub = POLYMARKET_RELAY_CONTRACTS.RELAY_HUB;
+
+    // 1. Get nonce and relay address
+    const relayPayload = await this.getRelayPayload(from);
+
+    // 2. Encode calls via ProxyWalletFactory.proxy(calls)
+    const proxyIface = new Interface(PROXY_ABI);
+    const encodedData = proxyIface.encodeFunctionData('proxy', [
+      calls.map((c) => ({
+        typeCode: 1, // CallType.Call
+        to: c.to,
+        value: 0n,
+        data: c.data,
+      })),
+    ]);
+
+    // 3. Create struct hash (rlx: prefix format)
+    const relayerFee = '0';
+    const gasPrice = '0';
+    const gasLimit = DEFAULT_GAS_LIMIT;
+
+    const structHash = this.createStructHash(
+      from,
+      proxyFactory,
+      encodedData,
+      relayerFee,
+      gasPrice,
+      gasLimit,
+      relayPayload.nonce,
+      relayHub,
+      relayPayload.address,
+    );
+
+    // 4. Sign the struct hash
+    const signature = await this.tradingAuthority.signMessage(
+      this.userId,
+      getBytes(structHash),
+    );
+
+    // 5. Submit to /submit
+    const request = {
       type: 'PROXY',
-      from: this.tradingAddress,
-      proxy: this.proxyAddress,
-      transactions: [
-        {
-          to: POLYMARKET_CONTRACTS.CONDITIONAL_TOKENS,
-          data,
-        },
-      ],
+      from,
+      to: proxyFactory,
+      proxyWallet: this.proxyAddress,
+      data: encodedData,
+      nonce: relayPayload.nonce,
+      signature,
+      signatureParams: {
+        gasPrice,
+        gasLimit,
+        relayerFee,
+        relayHub,
+        relay: relayPayload.address,
+      },
     };
 
-    const messageHash = getBytes(
-      keccak256(toUtf8Bytes(JSON.stringify(payload))),
-    );
-    const signature = await this.tradingAuthority.signMessage(this.userId, messageHash);
-
-    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/relay`, {
+    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, signature }),
+      body: JSON.stringify(request),
     });
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Relayer redeem failed: ${res.status} ${body}`);
+      throw new Error(`Relayer submit failed: ${res.status} ${body}`);
     }
 
-    const result = (await res.json()) as { transactionHash: string };
-    return result.transactionHash;
+    const result = (await res.json()) as {
+      transactionID: string;
+      state: string;
+      transactionHash: string;
+    };
+
+    // If no tx hash yet, poll for it
+    if (result.transactionHash) {
+      return result.transactionHash;
+    }
+
+    return this.pollForTxHash(result.transactionID);
+  }
+
+  private async getRelayPayload(
+    signerAddress: string,
+  ): Promise<{ address: string; nonce: string }> {
+    const url = new URL(`${POLYMARKET_URLS.RELAYER}/relay-payload`);
+    url.searchParams.set('address', signerAddress);
+    url.searchParams.set('type', 'PROXY');
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Relayer relay-payload failed: ${res.status} ${body}`);
+    }
+
+    return (await res.json()) as { address: string; nonce: string };
+  }
+
+  /**
+   * Create the struct hash matching the Polymarket relay hub format:
+   * keccak256(abi.encodePacked("rlx:", from, to, data, txFee, gasPrice, gasLimit, nonce, relayHub, relay))
+   */
+  private createStructHash(
+    from: string,
+    to: string,
+    data: string,
+    txFee: string,
+    gasPrice: string,
+    gasLimit: string,
+    nonce: string,
+    relayHubAddress: string,
+    relayAddress: string,
+  ): string {
+    const coder = new AbiCoder();
+    // Pack: "rlx:" prefix + addresses (20 bytes each) + data + uint256 fields + addresses
+    const packed = concat([
+      new Uint8Array([0x72, 0x6c, 0x78, 0x3a]), // "rlx:"
+      from as string,
+      to as string,
+      data as string,
+      zeroPadValue(toBeHex(BigInt(txFee)), 32),
+      zeroPadValue(toBeHex(BigInt(gasPrice)), 32),
+      zeroPadValue(toBeHex(BigInt(gasLimit)), 32),
+      zeroPadValue(toBeHex(BigInt(nonce)), 32),
+      relayHubAddress as string,
+      relayAddress as string,
+    ]);
+
+    return solidityPackedKeccak256(['bytes'], [packed]);
+  }
+
+  private async pollForTxHash(
+    transactionId: string,
+    maxPolls = 15,
+    intervalMs = 2000,
+  ): Promise<string> {
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+
+      const url = new URL(`${POLYMARKET_URLS.RELAYER}/transaction`);
+      url.searchParams.set('id', transactionId);
+
+      const res = await fetch(url.toString());
+      if (!res.ok) continue;
+
+      const txns = (await res.json()) as Array<{
+        transactionHash: string;
+        state: string;
+      }>;
+
+      if (txns.length > 0 && txns[0].transactionHash) {
+        if (txns[0].state === 'STATE_FAILED') {
+          throw new Error(`Relayer transaction failed: ${transactionId}`);
+        }
+        return txns[0].transactionHash;
+      }
+    }
+
+    throw new Error(`Relayer transaction timed out: ${transactionId}`);
   }
 
   private encodeApprove(spender: string, amount: bigint): string {
