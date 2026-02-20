@@ -1,9 +1,20 @@
 import { createHmac } from 'node:crypto';
-import { Interface, AbiCoder, solidityPackedKeccak256, concat, hexlify, getBytes, zeroPadValue, toBeHex } from 'ethers';
+import { Interface, AbiCoder, solidityPackedKeccak256, solidityPacked, concat, hexlify, getBytes, zeroPadValue, toBeHex, keccak256, getCreate2Address } from 'ethers';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
 const DEFAULT_GAS_LIMIT = '10000000';
+const PROXY_INIT_CODE_HASH = '0xd21df8dc65880a8606f09fe0ce3df9b8869287ab0b058be05aa9e8af6330a00b';
+
+/** Derive the Polymarket proxy wallet address via CREATE2 */
+function deriveProxyWallet(eoaAddress: string): string {
+  const salt = keccak256(solidityPacked(['address'], [eoaAddress]));
+  return getCreate2Address(
+    POLYMARKET_RELAY_CONTRACTS.PROXY_FACTORY,
+    salt,
+    PROXY_INIT_CODE_HASH,
+  );
+}
 
 // Builder auth credentials (from env)
 function getBuilderCreds() {
@@ -159,12 +170,13 @@ export class RelayerAdapter {
       getBytes(structHash),
     );
 
-    // 5. Submit to /submit
+    // 5. Submit to /submit (proxyWallet = CREATE2 derived, not stored POLY_PROXY)
+    const derivedProxy = deriveProxyWallet(from);
     const request = {
       type: 'PROXY',
       from,
       to: proxyFactory,
-      proxyWallet: this.proxyAddress,
+      proxyWallet: derivedProxy,
       data: encodedData,
       nonce: relayPayload.nonce,
       signature,
