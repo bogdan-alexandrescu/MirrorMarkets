@@ -106,9 +106,12 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
       chainId: 137,
       rpcUrl: config.POLYGON_RPC_URL,
     });
-    // Raw bytes must use { raw: ... } so viem doesn't UTF-8 encode them
+    // Raw bytes must use { raw: hex } so viem decodes hex to bytes
+    // instead of treating the message as UTF-8 text.
+    // Dynamic SDK may not support Uint8Array in raw, so use hex string.
     if (message instanceof Uint8Array) {
-      return walletClient.signMessage({ message: { raw: message } });
+      const hex = `0x${Buffer.from(message).toString('hex')}` as `0x${string}`;
+      return walletClient.signMessage({ message: { raw: hex } });
     }
     return walletClient.signMessage({ message });
   }
