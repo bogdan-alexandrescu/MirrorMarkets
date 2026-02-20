@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { Interface, solidityPackedKeccak256, solidityPacked, concat, hexlify, getBytes, zeroPadValue, toBeHex, keccak256, getCreate2Address, Signature } from 'ethers';
+import { Interface, solidityPackedKeccak256, solidityPacked, concat, hexlify, getBytes, zeroPadValue, toBeHex, keccak256, getCreate2Address } from 'ethers';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
@@ -43,25 +43,6 @@ function buildBuilderHeaders(method: string, path: string, body?: string): Recor
     POLY_BUILDER_SIGNATURE: sigUrlSafe,
     POLY_BUILDER_TIMESTAMP: `${timestamp}`,
   };
-}
-
-/**
- * Adjust signature v-value for GSN relay hub format.
- * The relay hub uses v >= 31 to indicate "eth_sign" (prefixed message).
- * signMessage() produces standard ECDSA sigs with v=27/28, so we add 4.
- */
-function packRelaySignature(rawSig: string): string {
-  const sig = Signature.from(rawSig);
-  let v: number = sig.v;
-  if (v === 27 || v === 28) {
-    v += 4; // 31 or 32 — signals eth_sign format
-  } else if (v === 0 || v === 1) {
-    v += 31;
-  }
-  return solidityPacked(
-    ['uint256', 'uint256', 'uint8'],
-    [sig.r, sig.s, v],
-  );
 }
 
 // ProxyWalletFactory.proxy(calls) ABI for encoding batched proxy calls
@@ -183,12 +164,11 @@ export class RelayerAdapter {
       relayPayload.address,
     );
 
-    // 4. Sign the struct hash and pack for relay hub format
-    const rawSignature = await this.tradingAuthority.signMessage(
+    // 4. Sign the struct hash (raw signature, no v-adjustment for PROXY type)
+    const signature = await this.tradingAuthority.signMessage(
       this.userId,
       getBytes(structHash),
     );
-    const packedSignature = packRelaySignature(rawSignature);
 
     // 5. Submit to /submit (proxyWallet = CREATE2 derived, not stored POLY_PROXY)
     const derivedProxy = deriveProxyWallet(from);
@@ -199,7 +179,7 @@ export class RelayerAdapter {
       proxyWallet: derivedProxy,
       data: encodedData,
       nonce: relayPayload.nonce,
-      signature: packedSignature,
+      signature,
       signatureParams: {
         gasPrice,
         gasLimit,
