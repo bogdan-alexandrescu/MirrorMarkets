@@ -63,7 +63,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   async signTypedData(userId: string, typedData: EIP712TypedData): Promise<string> {
     const sw = await this.requireReady(userId);
     const client = await this.getClient();
-    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
     const walletClient = await client.getWalletClient({
       accountAddress: sw.address,
@@ -87,7 +87,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
     const sw = await this.requireReady(userId);
     const client = await this.getClient();
-    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
     if (message instanceof Uint8Array) {
       // Dynamic SDK doesn't support viem's { raw: ... } message format.
@@ -121,7 +121,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   async executeTransaction(userId: string, tx: TransactionRequest): Promise<TransactionResult> {
     const sw = await this.requireReady(userId);
     const client = await this.getClient();
-    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
     const walletClient = await client.getWalletClient({
       accountAddress: sw.address,
