@@ -101,7 +101,7 @@ export class PositionSyncWorker {
   }
 
   private async getOnChainUsdcBalance(walletAddress: string): Promise<number> {
-    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
     const paddedAddr = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
     const callData = `${BALANCE_OF_SELECTOR}${paddedAddr}`;
 

@@ -135,7 +135,7 @@ export class ModuleExecWorker {
     let sessionKeyWallet: Wallet;
     try {
       const privateKey = decryptPrivateKey(activeSessionKey.encryptedPrivateKey, encryptionKey);
-      const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
+      const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
       const provider = new JsonRpcProvider(rpcUrl);
       sessionKeyWallet = new Wallet(privateKey, provider);
     } catch (error) {

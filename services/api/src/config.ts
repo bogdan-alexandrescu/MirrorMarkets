@@ -26,7 +26,7 @@ const configSchema = z.object({
   TRADING_KEY_ENCRYPTION_KEY: z.string().default('0'.repeat(64)),
 
   // Polygon RPC
-  POLYGON_RPC_URL: z.string().default('https://polygon-rpc.com'),
+  POLYGON_RPC_URL: z.string().default('https://polygon-bor-rpc.publicnode.com'),
 
   // Polymarket
   POLYMARKET_CLOB_API_URL: z.string().default('https://clob.polymarket.com'),
