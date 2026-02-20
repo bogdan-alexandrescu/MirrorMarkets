@@ -201,7 +201,7 @@ export class RelayerAdapter {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Relayer submit failed: ${res.status} ${body}`);
+      throw new Error(`Relayer submit failed: ${res.status} ${body} | request: ${requestBody}`);
     }
 
     const result = (await res.json()) as {
