@@ -4,15 +4,14 @@ import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
 const DEFAULT_GAS_LIMIT = '10000000';
-const PROXY_INIT_CODE_HASH = '0xd21df8dc65880a8606f09fe0ce3df9b8869287ab0b058be05aa9e8af6330a00b';
 
 /** Derive the Polymarket proxy wallet address via CREATE2 */
-function deriveProxyWallet(eoaAddress: string): string {
+export function deriveProxyWallet(eoaAddress: string): string {
   const salt = keccak256(solidityPacked(['address'], [eoaAddress]));
   return getCreate2Address(
     POLYMARKET_RELAY_CONTRACTS.PROXY_FACTORY,
     salt,
-    PROXY_INIT_CODE_HASH,
+    POLYMARKET_RELAY_CONTRACTS.PROXY_INIT_CODE_HASH,
   );
 }
 
