@@ -3,6 +3,7 @@ import { createWithdrawalSchema, paginationSchema } from '@mirrormarkets/shared'
 import { WalletService } from '../services/wallet.service.js';
 import { AuditService } from '../services/audit.service.js';
 import { getTradingAuthorityProvider } from '../adapters/trading-authority.factory.js';
+import { deriveProxyWallet } from '../adapters/relayer.adapter.js';
 
 export const fundRoutes: FastifyPluginAsync = async (app) => {
   const tradingAuthority = getTradingAuthorityProvider(app.prisma);
@@ -94,10 +95,19 @@ export const fundRoutes: FastifyPluginAsync = async (app) => {
 
       const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
 
-      // Mark proxy as deployed (exchange approved)
+      // Mark proxy as deployed and fix POLY_PROXY address to CREATE2-derived proxy
+      const tradingAddress = await tradingAuthority.getAddress(request.userId);
+      const proxyAddress = deriveProxyWallet(tradingAddress);
+
       await app.prisma.polymarketCredentials.update({
         where: { userId: request.userId },
         data: { isProxyDeployed: true },
+      });
+
+      await app.prisma.wallet.upsert({
+        where: { userId_type: { userId: request.userId, type: 'POLY_PROXY' } },
+        create: { userId: request.userId, type: 'POLY_PROXY', address: proxyAddress },
+        update: { address: proxyAddress },
       });
 
       await audit.log({

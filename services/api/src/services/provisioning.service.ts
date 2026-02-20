@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import type { TradingAuthorityProvider, ProvisioningStatus } from '@mirrormarkets/shared';
 import { AuditService } from './audit.service.js';
 import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
+import { deriveProxyWallet } from '../adapters/relayer.adapter.js';
 
 /**
  * ProvisioningService
@@ -104,11 +105,12 @@ export class ProvisioningService {
       });
     }
 
-    // Step 4: Store proxy address (placeholder — relayer deploys on first tx)
+    // Step 4: Store CREATE2-derived proxy address (relayer deploys on first tx)
+    const proxyAddress = deriveProxyWallet(tradingAddress);
     await this.prisma.wallet.upsert({
       where: { userId_type: { userId, type: 'POLY_PROXY' } },
-      create: { userId, type: 'POLY_PROXY', address: tradingAddress },
-      update: { address: tradingAddress },
+      create: { userId, type: 'POLY_PROXY', address: proxyAddress },
+      update: { address: proxyAddress },
     });
 
     // Step 5: Create default copy profile
