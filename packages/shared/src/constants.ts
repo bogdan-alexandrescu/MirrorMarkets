@@ -12,7 +12,13 @@ export const POLYMARKET_URLS = {
   CLOB: 'https://clob.polymarket.com',
   GAMMA: 'https://gamma-api.polymarket.com',
   DATA: 'https://data-api.polymarket.com',
-  RELAYER: 'https://relayer.polymarket.com',
+  RELAYER: 'https://relayer-v2.polymarket.com',
+} as const;
+
+// Polymarket relay contracts (Polygon mainnet)
+export const POLYMARKET_RELAY_CONTRACTS = {
+  PROXY_FACTORY: '0xaB45c5A4B0c941a2F231C04C3f49182e1A254052',
+  RELAY_HUB: '0xD216153c06E857cD7f72665E0aF1d7D82172F494',
 } as const;
 
 // Chain
