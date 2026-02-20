@@ -1,6 +1,6 @@
 import { DynamicEvmWalletClient } from '@dynamic-labs-wallet/node-evm';
 import { ThresholdSignatureScheme } from '@dynamic-labs-wallet/node';
-import { hashMessage } from 'ethers';
+import { hashMessage, getBytes } from 'ethers';
 import { polygon } from 'viem/chains';
 import type {
   DynamicServerWalletAdapter,
@@ -109,9 +109,10 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
       // computing the EIP-191 hash ourselves, then use the low-level sign()
       // method with isFormatted: true so the SDK signs the hash directly.
       const eip191Hash = hashMessage(message);
+      const hashBytes = getBytes(eip191Hash);
 
       const signatureEcdsa = await (client as any).sign({
-        message: eip191Hash,
+        message: hashBytes,
         accountAddress: walletAddress,
         chainName: 'EVM',
         isFormatted: true,
