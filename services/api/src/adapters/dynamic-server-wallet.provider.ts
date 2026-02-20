@@ -108,7 +108,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   }
 
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
-    const messageStr = typeof message === 'string'
+    const payloadStr = typeof message === 'string'
       ? message
       : Buffer.from(message).toString('hex');
 
@@ -116,8 +116,8 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       userId,
       requestType: 'MESSAGE',
       purpose: 'CLOB_API_KEY',
-      payload: { message: messageStr },
-      execute: async (externalWalletId) => this.adapter.signMessage(externalWalletId, messageStr),
+      payload: { message: payloadStr },
+      execute: async (externalWalletId) => this.adapter.signMessage(externalWalletId, message),
     });
   }
 

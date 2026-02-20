@@ -94,11 +94,10 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       rpcUrl,
     });
 
-    const messageStr = typeof message === 'string'
-      ? message
-      : Buffer.from(message).toString('hex');
-
-    return walletClient.signMessage({ message: messageStr });
+    if (message instanceof Uint8Array) {
+      return walletClient.signMessage({ message: { raw: message } });
+    }
+    return walletClient.signMessage({ message });
   }
 
   async executeTransaction(userId: string, tx: TransactionRequest): Promise<TransactionResult> {
