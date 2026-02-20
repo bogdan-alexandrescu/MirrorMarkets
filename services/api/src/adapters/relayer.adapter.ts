@@ -1,8 +1,38 @@
+import { createHmac } from 'node:crypto';
 import { Interface, AbiCoder, solidityPackedKeccak256, concat, hexlify, getBytes, zeroPadValue, toBeHex } from 'ethers';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
 const DEFAULT_GAS_LIMIT = '10000000';
+
+// Builder auth credentials (from env)
+function getBuilderCreds() {
+  const key = process.env.POLY_BUILDER_API_KEY ?? '';
+  const secret = process.env.POLY_BUILDER_SECRET ?? '';
+  const passphrase = process.env.POLY_BUILDER_PASSPHRASE ?? '';
+  return key && secret && passphrase ? { key, secret, passphrase } : null;
+}
+
+function buildBuilderHeaders(method: string, path: string, body?: string): Record<string, string> {
+  const creds = getBuilderCreds();
+  if (!creds) return {};
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  let message = `${timestamp}${method}${path}`;
+  if (body !== undefined) message += body;
+
+  const base64Secret = Buffer.from(creds.secret, 'base64');
+  const sig = createHmac('sha256', base64Secret).update(message).digest('base64');
+  // URL-safe base64 (keep = suffix)
+  const sigUrlSafe = sig.replace(/\+/g, '-').replace(/\//g, '_');
+
+  return {
+    POLY_BUILDER_API_KEY: creds.key,
+    POLY_BUILDER_PASSPHRASE: creds.passphrase,
+    POLY_BUILDER_SIGNATURE: sigUrlSafe,
+    POLY_BUILDER_TIMESTAMP: `${timestamp}`,
+  };
+}
 
 // ProxyWalletFactory.proxy(calls) ABI for encoding batched proxy calls
 const PROXY_ABI = [
@@ -147,10 +177,13 @@ export class RelayerAdapter {
       },
     };
 
+    const requestBody = JSON.stringify(request);
+    const builderHeaders = buildBuilderHeaders('POST', '/submit', requestBody);
+
     const res = await fetch(`${POLYMARKET_URLS.RELAYER}/submit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
+      headers: { 'Content-Type': 'application/json', ...builderHeaders },
+      body: requestBody,
     });
 
     if (!res.ok) {
