@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { Interface, solidityPackedKeccak256, solidityPacked, concat, hexlify, getBytes, zeroPadValue, toBeHex, keccak256, getCreate2Address } from 'ethers';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
-import { POLYMARKET_CONTRACTS, POLYMARKET_URLS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
+import { POLYMARKET_CONTRACTS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
 const DEFAULT_GAS_LIMIT = '10000000';
 
@@ -66,6 +66,7 @@ export class RelayerAdapter {
     private userId: string,
     private tradingAddress: string,
     private proxyAddress: string,
+    private relayerUrl: string = 'https://relayer-v2.polymarket.com',
   ) {}
 
   /**
@@ -192,7 +193,7 @@ export class RelayerAdapter {
     const requestBody = JSON.stringify(request);
     const builderHeaders = buildBuilderHeaders('POST', '/submit', requestBody);
 
-    const res = await fetch(`${POLYMARKET_URLS.RELAYER}/submit`, {
+    const res = await fetch(`${this.relayerUrl}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...builderHeaders },
       body: requestBody,
@@ -220,7 +221,7 @@ export class RelayerAdapter {
   private async getRelayPayload(
     signerAddress: string,
   ): Promise<{ address: string; nonce: string }> {
-    const url = new URL(`${POLYMARKET_URLS.RELAYER}/relay-payload`);
+    const url = new URL(`${this.relayerUrl}/relay-payload`);
     url.searchParams.set('address', signerAddress);
     url.searchParams.set('type', 'PROXY');
 
@@ -273,7 +274,7 @@ export class RelayerAdapter {
     for (let i = 0; i < maxPolls; i++) {
       await new Promise((r) => setTimeout(r, intervalMs));
 
-      const url = new URL(`${POLYMARKET_URLS.RELAYER}/transaction`);
+      const url = new URL(`${this.relayerUrl}/transaction`);
       url.searchParams.set('id', transactionId);
 
       const res = await fetch(url.toString());

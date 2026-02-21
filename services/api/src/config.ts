@@ -33,6 +33,9 @@ const configSchema = z.object({
   POLYMARKET_GAMMA_API_URL: z.string().default('https://gamma-api.polymarket.com'),
   POLYMARKET_DATA_API_URL: z.string().default('https://data-api.polymarket.com'),
 
+  // Polymarket Relayer
+  POLYMARKET_RELAYER_URL: z.string().default('https://relayer-v2.polymarket.com'),
+
   // Polymarket Builder (relayer auth)
   POLY_BUILDER_API_KEY: z.string().default(''),
   POLY_BUILDER_SECRET: z.string().default(''),
