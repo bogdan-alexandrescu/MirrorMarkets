@@ -2,10 +2,15 @@ import { PrismaClient } from '@prisma/client';
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
-import { AppError, ErrorCodes } from '@mirrormarkets/shared';
+import { AppError, ErrorCodes, POLYMARKET_CONTRACTS } from '@mirrormarkets/shared';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { evaluateGuardrails } from './guardrails.js';
 import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
+
+// Native USDC on Polygon (Circle-issued)
+const NATIVE_USDC = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+const BALANCE_OF_SELECTOR = '0x70a08231';
+const USDC_BALANCE_TTL = 600;
 
 /**
  * CopyEngine — Phase 2A
@@ -127,14 +132,31 @@ export class CopyEngine {
       const profile = user.copyProfile;
       if (!profile) return;
 
+      // Get trading authority address and proxy
+      const proxyWallet = user.wallets.find((w: any) => w.type === 'POLY_PROXY');
+      const creds = user.polymarketCredentials;
+
+      if (!proxyWallet || !creds) {
+        await this.prisma.copyAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'FAILED', errorMessage: 'Missing proxy wallet or credentials' },
+        });
+        return;
+      }
+
       // Get open orders for guardrail evaluation
       const openOrders = await this.prisma.order.findMany({
         where: { userId: user.id, status: 'OPEN' },
       });
 
       // Read cached USDC balance from Redis (set by position-sync worker)
+      // If cache is empty or zero, fallback to direct RPC lookup
       const cachedBalance = await this.redis.get(`user:${user.id}:usdc_balance`);
-      const currentBalance = cachedBalance ? parseFloat(cachedBalance) : 0;
+      let currentBalance = cachedBalance ? parseFloat(cachedBalance) : 0;
+
+      if (currentBalance === 0) {
+        currentBalance = await this.fetchUsdcBalance(user.id, proxyWallet.address);
+      }
 
       // Evaluate guardrails
       const result = evaluateGuardrails({
@@ -152,18 +174,6 @@ export class CopyEngine {
           data: { status: 'SKIPPED', skipReason: result.skipReason },
         });
         this.logger.info({ userId: user.id, reason: result.skipReason }, 'Copy skipped');
-        return;
-      }
-
-      // Get trading authority address and proxy
-      const proxyWallet = user.wallets.find((w: any) => w.type === 'POLY_PROXY');
-      const creds = user.polymarketCredentials;
-
-      if (!proxyWallet || !creds) {
-        await this.prisma.copyAttempt.update({
-          where: { id: attempt.id },
-          data: { status: 'FAILED', errorMessage: 'Missing proxy wallet or credentials' },
-        });
         return;
       }
 
@@ -251,5 +261,42 @@ export class CopyEngine {
 
       this.logger.error({ userId: user.id, err: error }, 'Copy trade failed');
     }
+  }
+
+  private async fetchUsdcBalance(userId: string, walletAddress: string): Promise<number> {
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
+    const paddedAddr = walletAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+    const callData = `${BALANCE_OF_SELECTOR}${paddedAddr}`;
+
+    const callContract = async (contractAddr: string): Promise<bigint> => {
+      try {
+        const res = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', method: 'eth_call',
+            params: [{ to: contractAddr, data: callData }, 'latest'], id: 1,
+          }),
+        });
+        const data = (await res.json()) as { result?: string };
+        return data.result ? BigInt(data.result) : 0n;
+      } catch {
+        return 0n;
+      }
+    };
+
+    const [usdcE, native] = await Promise.all([
+      callContract(POLYMARKET_CONTRACTS.USDC),
+      callContract(NATIVE_USDC),
+    ]);
+
+    const balance = Number(usdcE + native) / 1e6;
+
+    // Cache for future lookups
+    if (balance > 0) {
+      await this.redis.set(`user:${userId}:usdc_balance`, balance.toString(), 'EX', USDC_BALANCE_TTL);
+    }
+
+    return balance;
   }
 }
