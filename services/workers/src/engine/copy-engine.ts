@@ -224,11 +224,27 @@ export class CopyEngine {
         price: result.adjustedPrice,
       });
 
+      // postOrder returns { error: ... } on failure instead of throwing
+      if (orderResult.error || !orderResult.orderID) {
+        const errorMsg = typeof orderResult.error === 'string'
+          ? orderResult.error
+          : JSON.stringify(orderResult.error ?? orderResult);
+        await this.prisma.copyAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'FAILED', errorMessage: `CLOB rejected: ${errorMsg}` },
+        });
+        this.logger.warn(
+          { userId: user.id, clobResponse: orderResult },
+          'CLOB order rejected',
+        );
+        return;
+      }
+
       // Store order
       const order = await this.prisma.order.create({
         data: {
           userId: user.id,
-          polyOrderId: orderResult.orderID ?? orderResult.id,
+          polyOrderId: orderResult.orderID,
           conditionId: leaderEvent.conditionId,
           tokenId: leaderEvent.tokenId,
           marketSlug: leaderEvent.marketSlug,
@@ -247,7 +263,7 @@ export class CopyEngine {
       this.circuitBreaker.recordSuccess();
 
       this.logger.info(
-        { userId: user.id, orderId: order.id, size: result.adjustedSize },
+        { userId: user.id, orderId: order.id, polyOrderId: orderResult.orderID, size: result.adjustedSize },
         'Copy trade submitted',
       );
     } catch (error) {
