@@ -127,7 +127,7 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
 
     // Check Polymarket CLOB
     try {
-      const res = await fetch('https://clob.polymarket.com/time');
+      const res = await fetch(`${config.POLYMARKET_CLOB_API_URL}/time`);
       if (!res.ok) status.polymarketClob = 'degraded';
     } catch {
       status.polymarketClob = 'down';

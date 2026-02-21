@@ -58,7 +58,8 @@ export class HealthCheckWorker {
 
       // Check Polymarket CLOB
       try {
-        const res = await fetch('https://clob.polymarket.com/time');
+        const clobUrl = process.env.POLYMARKET_CLOB_API_URL ?? 'https://clob.polymarket.com';
+        const res = await fetch(`${clobUrl}/time`);
         checks.polymarketClob = res.ok ? 'ok' : 'degraded';
       } catch {
         checks.polymarketClob = 'down';

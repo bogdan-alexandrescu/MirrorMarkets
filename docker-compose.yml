@@ -59,6 +59,15 @@ services:
       redis:
         condition: service_healthy
 
+  poly-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.poly-proxy
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: "3002"
+
   web:
     build:
       context: .

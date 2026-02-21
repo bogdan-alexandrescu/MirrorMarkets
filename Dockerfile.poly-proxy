@@ -1,0 +1,22 @@
+FROM node:20-slim AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY services/poly-proxy/package.json services/poly-proxy/
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN pnpm install --frozen-lockfile --filter=@mirrormarkets/poly-proxy
+
+FROM base AS build
+COPY --from=deps /app ./
+COPY tsconfig.base.json ./
+COPY services/poly-proxy/ services/poly-proxy/
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN pnpm --filter=@mirrormarkets/poly-proxy build
+
+FROM node:20-slim AS runner
+WORKDIR /app
+COPY --from=build /app/services/poly-proxy/dist ./dist
+
+ENV NODE_ENV=production
+CMD ["node", "dist/index.js"]

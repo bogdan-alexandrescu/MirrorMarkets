@@ -3,6 +3,7 @@ import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { NotFoundError, AppError, ErrorCodes } from '@mirrormarkets/shared';
 import { PolymarketAdapter } from '../adapters/polymarket.adapter.js';
 import { RelayerAdapter } from '../adapters/relayer.adapter.js';
+import { getConfig } from '../config.js';
 
 /**
  * WalletService — Phase 2A
@@ -73,6 +74,7 @@ export class WalletService {
    */
   async getRelayerAdapter(userId: string): Promise<RelayerAdapter> {
     const { tradingAddress, proxyAddress } = await this.getTradingAddressAndProxy(userId);
-    return new RelayerAdapter(this.tradingAuthority, userId, tradingAddress, proxyAddress);
+    const config = getConfig();
+    return new RelayerAdapter(this.tradingAuthority, userId, tradingAddress, proxyAddress, config.POLYMARKET_RELAYER_URL);
   }
 }
