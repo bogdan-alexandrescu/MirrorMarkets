@@ -9,18 +9,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post('/reconcile', {
     preHandler: [app.authenticate],
   }, async (request, reply) => {
-    // Trigger reconciliation of all open orders
+    const query = (request.query ?? {}) as Record<string, string>;
+    const maxAgeMs = parseInt(query.maxAgeMs ?? '') || 24 * 60 * 60 * 1000;
+
     const openOrders = await app.prisma.order.findMany({
       where: { status: 'OPEN' },
       include: { user: { select: { id: true } } },
     });
 
     let reconciled = 0;
+    const staleThreshold = new Date(Date.now() - maxAgeMs);
+
     for (const order of openOrders) {
-      // In production, check order status against Polymarket CLOB
-      // For now, mark stale orders as expired
-      const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      if (order.createdAt < staleThreshold) {
+      // Expire orders that are stale or were never placed on the exchange
+      if (order.createdAt < staleThreshold || !order.polyOrderId) {
         await app.prisma.order.update({
           where: { id: order.id },
           data: { status: 'EXPIRED' },

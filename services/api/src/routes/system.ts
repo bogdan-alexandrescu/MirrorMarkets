@@ -106,18 +106,19 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
       const healthPing = await app.redis.get('worker:health-check:last-ping');
       const positionPing = await app.redis.get('worker:position-sync:last-ping');
 
-      const staleThreshold = Date.now() - 120_000; // 2 minutes
+      const shortStale = Date.now() - 120_000; // 2 minutes (for 15s–60s workers)
+      const longStale = Date.now() - 600_000;  // 10 minutes (for 5m+ workers)
 
-      if (!copyWorkerPing || parseInt(copyWorkerPing) < staleThreshold) {
+      if (!copyWorkerPing || parseInt(copyWorkerPing) < shortStale) {
         status.workers.copyTrading = 'stopped';
       }
-      if (!autoClaimPing || parseInt(autoClaimPing) < staleThreshold) {
+      if (!autoClaimPing || parseInt(autoClaimPing) < longStale) {
         status.workers.autoClaim = 'stopped';
       }
-      if (!healthPing || parseInt(healthPing) < staleThreshold) {
+      if (!healthPing || parseInt(healthPing) < shortStale) {
         status.workers.healthCheck = 'stopped';
       }
-      if (!positionPing || parseInt(positionPing) < staleThreshold) {
+      if (!positionPing || parseInt(positionPing) < longStale) {
         status.workers.positionSync = 'stopped';
       }
     } catch {
