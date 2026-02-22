@@ -29,6 +29,25 @@ function proxy(req: IncomingMessage, res: ServerResponse): void {
     return handleHealth(req, res);
   }
 
+  // IP check — returns this server's outbound IP for debugging geo issues
+  if (url === '/ip') {
+    const ipReq = httpsRequest('https://api.ipify.org?format=json', (ipRes) => {
+      let body = '';
+      ipRes.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      ipRes.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(body);
+        log(req.method ?? 'GET', url, 200, Date.now() - start);
+      });
+    });
+    ipReq.on('error', () => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'ip check failed' }));
+    });
+    ipReq.end();
+    return;
+  }
+
   // Find matching route prefix
   let targetOrigin: string | undefined;
   let stripped = '';
