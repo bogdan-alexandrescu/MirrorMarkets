@@ -64,6 +64,14 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
   async signTypedData(userId: string, typedData: EIP712TypedData): Promise<string> {
     const sw = await this.requireReady(userId);
     const client = await this.getClient();
+    const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
+
+    // Warm up wallet so the SDK loads MPC key shares into memory
+    await client.getWalletClient({
+      accountAddress: sw.address,
+      chainId: 137,
+      rpcUrl,
+    });
 
     // Filter out EIP712Domain from types (Viem expects only custom types)
     const types = Object.fromEntries(
@@ -80,24 +88,20 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     });
     const hashBytes = getBytes(eip712Hash);
 
-    const signatureEcdsa = await (client as any).sign({
-      message: hashBytes,
-      accountAddress: sw.address,
-      chainName: 'EVM',
-      isFormatted: true,
-    });
-
-    const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
-    const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
-    const v = Number(signatureEcdsa.v);
-    const vNormalized = v < 27 ? v + 27 : v;
-    return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
+    return this.lowLevelSign(client, hashBytes, sw.address);
   }
 
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
     const sw = await this.requireReady(userId);
     const client = await this.getClient();
     const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
+
+    // Always warm up the wallet so the SDK loads MPC key shares into memory
+    await client.getWalletClient({
+      accountAddress: sw.address,
+      chainId: 137,
+      rpcUrl,
+    });
 
     if (message instanceof Uint8Array) {
       // Dynamic SDK doesn't support viem's { raw: ... } message format.
@@ -106,18 +110,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       const eip191Hash = hashMessage(message);
       const hashBytes = getBytes(eip191Hash);
 
-      const signatureEcdsa = await (client as any).sign({
-        message: hashBytes,
-        accountAddress: sw.address,
-        chainName: 'EVM',
-        isFormatted: true,
-      });
-
-      const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
-      const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
-      const v = Number(signatureEcdsa.v);
-      const vNormalized = v < 27 ? v + 27 : v;
-      return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
+      return this.lowLevelSign(client, hashBytes, sw.address);
     }
 
     const walletClient = await client.getWalletClient({
@@ -148,6 +141,21 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     });
 
     return { hash, status: 'submitted' };
+  }
+
+  private async lowLevelSign(client: DynamicEvmWalletClient, hashBytes: Uint8Array, walletAddress: string): Promise<string> {
+    const signatureEcdsa = await (client as any).sign({
+      message: hashBytes,
+      accountAddress: walletAddress,
+      chainName: 'EVM',
+      isFormatted: true,
+    });
+
+    const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
+    const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
+    const v = Number(signatureEcdsa.v);
+    const vNormalized = v < 27 ? v + 27 : v;
+    return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
   }
 
   private async requireReady(userId: string) {
