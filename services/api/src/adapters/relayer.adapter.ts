@@ -3,7 +3,23 @@ import { Interface, solidityPackedKeccak256, solidityPacked, concat, hexlify, ge
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
-const DEFAULT_GAS_LIMIT = '10000000';
+// Gas constants matching Polymarket relay SDK
+const GAS_CONSTANTS = {
+  BASE_GAS_PER_TX: 150_000,
+  RELAY_HUB_PADDING: 3_450_000,
+  OVERHEAD_BUFFER: 450_000,
+  INTRINSIC_COST: 30_000,
+  MIN_EXECUTION_BUFFER: 500_000,
+};
+
+function calculateGasLimit(transactionCount: number): string {
+  const { BASE_GAS_PER_TX, RELAY_HUB_PADDING, OVERHEAD_BUFFER, INTRINSIC_COST, MIN_EXECUTION_BUFFER } = GAS_CONSTANTS;
+  const txGas = transactionCount * BASE_GAS_PER_TX;
+  const relayerWillSend = txGas + RELAY_HUB_PADDING;
+  const maxSignable = relayerWillSend - INTRINSIC_COST - OVERHEAD_BUFFER;
+  const executionNeeds = txGas + MIN_EXECUTION_BUFFER;
+  return Math.min(maxSignable, Math.max(executionNeeds, 3_000_000)).toString();
+}
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
 export class RelayerTransactionReverted extends Error {
@@ -158,7 +174,7 @@ export class RelayerAdapter {
     // 3. Create struct hash (rlx: prefix format)
     const relayerFee = '0';
     const gasPrice = '0';
-    const gasLimit = DEFAULT_GAS_LIMIT;
+    const gasLimit = calculateGasLimit(calls.length);
 
     const structHash = this.createStructHash(
       from,
