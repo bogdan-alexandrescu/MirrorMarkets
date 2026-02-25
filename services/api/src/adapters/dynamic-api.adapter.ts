@@ -104,6 +104,13 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
     const client = await this.getClient();
     const config = getConfig();
 
+    // Always warm up the wallet so the SDK loads MPC key shares into memory
+    await client.getWalletClient({
+      accountAddress: walletAddress,
+      chainId: 137,
+      rpcUrl: config.POLYGON_RPC_URL,
+    });
+
     if (message instanceof Uint8Array) {
       // The Dynamic SDK's walletClient.signMessage doesn't support viem's
       // { raw: Uint8Array | Hex } format (API returns 400). Bypass it by
@@ -112,19 +119,7 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
       const eip191Hash = hashMessage(message);
       const hashBytes = getBytes(eip191Hash);
 
-      const signatureEcdsa = await (client as any).sign({
-        message: hashBytes,
-        accountAddress: walletAddress,
-        chainName: 'EVM',
-        isFormatted: true,
-      });
-
-      // Serialize ECDSA signature (r + s + v)
-      const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
-      const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
-      const v = Number(signatureEcdsa.v);
-      const vNormalized = v < 27 ? v + 27 : v;
-      return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
+      return this.lowLevelSign(client, hashBytes, walletAddress);
     }
 
     const walletClient = await client.getWalletClient({
@@ -137,6 +132,14 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
 
   async signTypedData(walletAddress: string, typedData: EIP712TypedData): Promise<string> {
     const client = await this.getClient();
+    const config = getConfig();
+
+    // Warm up wallet so the SDK loads MPC key shares into memory
+    await client.getWalletClient({
+      accountAddress: walletAddress,
+      chainId: 137,
+      rpcUrl: config.POLYGON_RPC_URL,
+    });
 
     // Filter out EIP712Domain from types (Viem expects only custom types)
     const types = Object.fromEntries(
@@ -153,6 +156,10 @@ export class DynamicApiAdapter implements DynamicServerWalletAdapter {
     });
     const hashBytes = getBytes(eip712Hash);
 
+    return this.lowLevelSign(client, hashBytes, walletAddress);
+  }
+
+  private async lowLevelSign(client: DynamicEvmWalletClient, hashBytes: Uint8Array, walletAddress: string): Promise<string> {
     const signatureEcdsa = await (client as any).sign({
       message: hashBytes,
       accountAddress: walletAddress,
