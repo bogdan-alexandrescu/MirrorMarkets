@@ -1,8 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DynamicEvmWalletClient } from '@dynamic-labs-wallet/node-evm';
 import { ThresholdSignatureScheme } from '@dynamic-labs-wallet/node';
-import { hashMessage, getBytes } from 'ethers';
-import { hashTypedData } from 'viem';
+import { hashMessage, getBytes, hexlify } from 'ethers';
 import { polygon } from 'viem/chains';
 import type {
   TradingAuthorityProvider,
@@ -66,8 +65,7 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const client = await this.getClient();
     const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
-    // Warm up wallet so the SDK loads MPC key shares into memory
-    await client.getWalletClient({
+    const walletClient = await client.getWalletClient({
       accountAddress: sw.address,
       chainId: 137,
       rpcUrl,
@@ -78,17 +76,12 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
       Object.entries(typedData.types).filter(([k]) => k !== 'EIP712Domain'),
     );
 
-    // Compute the EIP-712 hash locally, then use low-level sign()
-    // (same approach as signMessage for raw bytes — bypasses Dynamic SDK pipeline)
-    const eip712Hash = hashTypedData({
-      domain: typedData.domain as any,
+    return walletClient.signTypedData({
+      domain: typedData.domain,
       types,
       primaryType: Object.keys(types)[0],
       message: typedData.message,
     });
-    const hashBytes = getBytes(eip712Hash);
-
-    return this.lowLevelSign(client, hashBytes, sw.address);
   }
 
   async signMessage(userId: string, message: string | Uint8Array): Promise<string> {
@@ -96,28 +89,18 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     const client = await this.getClient();
     const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
-    // Always warm up the wallet so the SDK loads MPC key shares into memory
-    await client.getWalletClient({
+    const walletClient = await client.getWalletClient({
       accountAddress: sw.address,
       chainId: 137,
       rpcUrl,
     });
 
     if (message instanceof Uint8Array) {
-      // Dynamic SDK doesn't support viem's { raw: ... } message format.
-      // Compute the EIP-191 hash ourselves, then use the low-level sign()
-      // method with isFormatted: true so the SDK signs the hash directly.
-      const eip191Hash = hashMessage(message);
-      const hashBytes = getBytes(eip191Hash);
-
-      return this.lowLevelSign(client, hashBytes, sw.address);
+      // Pass raw bytes via viem's { raw: Hex } format
+      const rawHex = hexlify(message) as `0x${string}`;
+      return walletClient.signMessage({ message: { raw: rawHex } });
     }
 
-    const walletClient = await client.getWalletClient({
-      accountAddress: sw.address,
-      chainId: 137,
-      rpcUrl,
-    });
     return walletClient.signMessage({ message });
   }
 
@@ -141,21 +124,6 @@ export class DynamicServerWalletProvider implements TradingAuthorityProvider {
     });
 
     return { hash, status: 'submitted' };
-  }
-
-  private async lowLevelSign(client: DynamicEvmWalletClient, hashBytes: Uint8Array, walletAddress: string): Promise<string> {
-    const signatureEcdsa = await (client as any).sign({
-      message: hashBytes,
-      accountAddress: walletAddress,
-      chainName: 'EVM',
-      isFormatted: true,
-    });
-
-    const r = Buffer.from(signatureEcdsa.r).toString('hex').padStart(64, '0');
-    const s = Buffer.from(signatureEcdsa.s).toString('hex').padStart(64, '0');
-    const v = Number(signatureEcdsa.v);
-    const vNormalized = v < 27 ? v + 27 : v;
-    return `0x${r}${s}${vNormalized.toString(16).padStart(2, '0')}`;
   }
 
   private async requireReady(userId: string) {
