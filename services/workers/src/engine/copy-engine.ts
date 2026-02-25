@@ -205,6 +205,18 @@ export class CopyEngine {
         return;
       }
 
+      const signatureType = creds.isProxyDeployed ? 'POLY_PROXY' : 'EOA';
+      this.logger.info(
+        {
+          userId: user.id,
+          tradingAddress,
+          proxyWalletAddress: proxyWallet.address,
+          isProxyDeployed: creds.isProxyDeployed,
+          signatureType,
+        },
+        'Copy trade signing context',
+      );
+
       const adapter = new PolymarketAdapter(
         this.tradingAuthority,
         user.id,
@@ -234,7 +246,17 @@ export class CopyEngine {
           data: { status: 'FAILED', errorMessage: `CLOB rejected: ${errorMsg}` },
         });
         this.logger.warn(
-          { userId: user.id, clobResponse: orderResult },
+          {
+            userId: user.id,
+            clobResponse: orderResult,
+            orderParams: {
+              tokenId: leaderEvent.tokenId,
+              side: leaderEvent.side,
+              size: result.adjustedSize,
+              price: result.adjustedPrice,
+            },
+            signatureType,
+          },
           'CLOB order rejected',
         );
         return;

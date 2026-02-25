@@ -4,6 +4,14 @@ import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
 const DEFAULT_GAS_LIMIT = '10000000';
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
+
+export class RelayerTransactionReverted extends Error {
+  constructor(public readonly txHash: string, public readonly gasUsed: string) {
+    super(`Relayer transaction reverted on-chain: ${txHash} (gasUsed: ${gasUsed})`);
+    this.name = 'RelayerTransactionReverted';
+  }
+}
 
 /** Derive the Polymarket proxy wallet address via CREATE2 */
 export function deriveProxyWallet(eoaAddress: string): string {
@@ -211,11 +219,50 @@ export class RelayerAdapter {
     };
 
     // If no tx hash yet, poll for it
-    if (result.transactionHash) {
-      return result.transactionHash;
+    const txHash = result.transactionHash
+      ? result.transactionHash
+      : await this.pollForTxHash(result.transactionID);
+
+    // Verify the transaction succeeded on-chain
+    await this.waitForReceipt(txHash);
+
+    return txHash;
+  }
+
+  /**
+   * Poll eth_getTransactionReceipt until the tx is mined.
+   * Throws RelayerTransactionReverted if status === '0x0'.
+   */
+  private async waitForReceipt(
+    txHash: string,
+    maxRetries = 30,
+    intervalMs = 2000,
+  ): Promise<{ status: string; gasUsed: string }> {
+    for (let i = 0; i < maxRetries; i++) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+
+      const res = await fetch(POLYGON_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionReceipt',
+          params: [txHash],
+          id: 1,
+        }),
+      });
+
+      const data = (await res.json()) as { result?: { status: string; gasUsed: string } };
+      if (!data.result) continue; // Not mined yet
+
+      if (data.result.status === '0x0') {
+        throw new RelayerTransactionReverted(txHash, data.result.gasUsed);
+      }
+
+      return data.result;
     }
 
-    return this.pollForTxHash(result.transactionID);
+    throw new Error(`Timed out waiting for tx receipt: ${txHash}`);
   }
 
   private async getRelayPayload(

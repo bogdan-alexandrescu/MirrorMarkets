@@ -112,6 +112,23 @@ export const fundRoutes: FastifyPluginAsync = async (app) => {
       const relayer = await walletService.getRelayerAdapter(request.userId);
       const { ctfTxHash, negRiskTxHash } = await relayer.approveExchange();
 
+      // Belt-and-suspenders: verify the proxy contract actually exists on-chain
+      const rpcUrl = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
+      const codeRes = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getCode',
+          params: [proxyAddress, 'latest'],
+          id: 1,
+        }),
+      });
+      const codeData = (await codeRes.json()) as { result?: string };
+      if (!codeData.result || codeData.result === '0x' || codeData.result === '0x0') {
+        throw new Error(`Proxy contract not deployed at ${proxyAddress} after relayer tx succeeded`);
+      }
+
       await app.prisma.polymarketCredentials.update({
         where: { userId: request.userId },
         data: { isProxyDeployed: true },
