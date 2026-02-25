@@ -3,23 +3,11 @@ import { Interface, solidityPackedKeccak256, solidityPacked, concat, hexlify, ge
 import type { TradingAuthorityProvider } from '@mirrormarkets/shared';
 import { POLYMARKET_CONTRACTS, POLYMARKET_RELAY_CONTRACTS } from '@mirrormarkets/shared';
 
-// Gas constants matching Polymarket relay SDK
-const GAS_CONSTANTS = {
-  BASE_GAS_PER_TX: 150_000,
-  RELAY_HUB_PADDING: 3_450_000,
-  OVERHEAD_BUFFER: 450_000,
-  INTRINSIC_COST: 30_000,
-  MIN_EXECUTION_BUFFER: 500_000,
-};
-
-function calculateGasLimit(transactionCount: number): string {
-  const { BASE_GAS_PER_TX, RELAY_HUB_PADDING, OVERHEAD_BUFFER, INTRINSIC_COST, MIN_EXECUTION_BUFFER } = GAS_CONSTANTS;
-  const txGas = transactionCount * BASE_GAS_PER_TX;
-  const relayerWillSend = txGas + RELAY_HUB_PADDING;
-  const maxSignable = relayerWillSend - INTRINSIC_COST - OVERHEAD_BUFFER;
-  const executionNeeds = txGas + MIN_EXECUTION_BUFFER;
-  return Math.min(maxSignable, Math.max(executionNeeds, 3_000_000)).toString();
-}
+// Gas limit for relayed proxy transactions.
+// The Polymarket relayer sends txs with ~950K gas. The relay hub checks
+// gasleft() >= gasLimit + overhead (~50K). So gasLimit must be < ~900K.
+// Proxy creation + batched calls need ~200-300K, so 500K gives headroom.
+const DEFAULT_GAS_LIMIT = '500000';
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL ?? 'https://polygon-bor-rpc.publicnode.com';
 
 export class RelayerTransactionReverted extends Error {
@@ -174,7 +162,7 @@ export class RelayerAdapter {
     // 3. Create struct hash (rlx: prefix format)
     const relayerFee = '0';
     const gasPrice = '0';
-    const gasLimit = calculateGasLimit(calls.length);
+    const gasLimit = DEFAULT_GAS_LIMIT;
 
     const structHash = this.createStructHash(
       from,
